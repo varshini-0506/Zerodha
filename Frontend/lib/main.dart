@@ -148,7 +148,7 @@ class _StockListPageState extends State<StockListPage> {
   String selectedSector = 'All';
   String selectedRating = 'All';
   String selectedPerf = 'All';
-  List<Stock> watchlist = [];
+  List<Stock> watchlist = [sampleStocks[0], sampleStocks[1]]; // Initialize with AAPL and MSFT
 
   List<String> sectors = ['All', 'Technology', 'Automotive', 'Consumer Services'];
   List<String> ratings = ['All', 'Buy', 'Hold', 'Sell'];
@@ -247,7 +247,7 @@ class _StockListPageState extends State<StockListPage> {
                     title: Text('${stock.symbol} - ${stock.name}'),
                     subtitle: Text('₹${stock.price} | ${stock.change}% | ${stock.rating} | ${stock.sector}'),
                     trailing: IconButton(
-                      icon: Icon(Icons.star_border),
+                      icon: Icon(Icons.favorite_border),
                       onPressed: () {
                         setState(() {
                           if (!watchlist.contains(stock)) watchlist.add(stock);
