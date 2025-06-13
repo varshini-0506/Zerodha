@@ -4,7 +4,7 @@ import json
 
 API_KEY = "twjr4rle0urwrre6"
 API_SECRET = "v17wa8esxo7341tyk2231mj93e1i8je3"
-ACCESS_TOKEN = "RuqT75xVD6st7JBW1ksn81lvDcc5gQPT"
+ACCESS_TOKEN = "KfnbuZVMVhMplVtB9TeVQKfYuiblX12x"
 
 kite = KiteConnect(api_key=API_KEY)
 kite.set_access_token(ACCESS_TOKEN)
