@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'models/stock_model.dart';
 import 'services/stock_service.dart';
 import 'widgets/live_price_chart.dart';
+import 'dart:ui';
 
 class StockDetailPage extends StatefulWidget {
   final Stock stock;
@@ -68,136 +69,166 @@ class _StockDetailPageState extends State<StockDetailPage> {
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Stock Header
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.teal[600]!, Colors.teal[400]!],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.teal[50]!, Colors.white],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Stock Header
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.teal[600]!, Colors.teal[400]!],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.teal.withOpacity(0.13),
+                      blurRadius: 24,
+                      offset: Offset(0, 10),
+                    ),
+                  ],
                 ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Text(
-                          _stock.name,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        Expanded(
+                          child: Text(
+                            _stock.name,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _stock.symbol,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white.withOpacity(0.8),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white.withOpacity(0.25)),
+                          ),
+                          child: Text(
+                            _stock.symbol,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              letterSpacing: 1.2,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '₹${(_stock.lastPrice ?? 0.0).toStringAsFixed(2)}',
+                    const SizedBox(height: 18),
+                    Text(
+                      'Live Price',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: Colors.white.withOpacity(0.9),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: (_stock.lastPrice ?? 0.0)),
+                      duration: Duration(milliseconds: 900),
+                      builder: (context, value, child) => Text(
+                        '₹${value.toStringAsFixed(2)}',
                         style: const TextStyle(
-                          fontSize: 28,
+                          fontSize: 38,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
+                          letterSpacing: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: (_stock.changePercent ?? 0.0) >= 0 ? Colors.green : Colors.red,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${(_stock.changePercent ?? 0.0) >= 0 ? '+' : ''}${(_stock.changePercent ?? 0.0).toStringAsFixed(2)}%',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Live Price Chart
-            LivePriceChart(
-              stock: _stock,
-              height: 300,
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Stock Metrics
-            _buildMetricsSection(),
-            
-            const SizedBox(height: 24),
-            
-            // Performance Summary
-            _buildPerformanceSection(),
-          ],
+              const SizedBox(height: 28),
+              Divider(thickness: 1.2, color: Colors.teal[100]),
+              const SizedBox(height: 18),
+              // Stock Metrics (Custom 2x3 Grid)
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.teal.withOpacity(0.08),
+                      blurRadius: 16,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.teal.withOpacity(0.08)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Stock Metrics',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal[800],
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    // Row 1: High, Low
+                    Row(
+                      children: [
+                        Flexible(child: _buildMetricCard('High', '₹${(_stock.high ?? 0.0).toStringAsFixed(2)}', Icons.trending_up_rounded)),
+                        SizedBox(width: 8),
+                        Flexible(child: _buildMetricCard('Low', '₹${(_stock.low ?? 0.0).toStringAsFixed(2)}', Icons.trending_down_rounded)),
+                      ],
+                    ),
+                    SizedBox(height: 10),
+                    // Row 2: Open, Prev. Close
+                    Row(
+                      children: [
+                        Flexible(child: _buildMetricCard('Open', '₹${(_stock.open ?? 0.0).toStringAsFixed(2)}', Icons.play_arrow_rounded)),
+                        SizedBox(width: 8),
+                        Flexible(child: _buildMetricCard('Prev. Close', '₹${(_stock.close ?? 0.0).toStringAsFixed(2)}', Icons.close_rounded)),
+                      ],
+                    ),
+                    SizedBox(height: 10),
+                    // Row 3: Volume (spans both columns)
+                    Row(
+                      children: [
+                        Flexible(
+                          child: _buildMetricCard('Volume', _stock.volume?.toString() ?? 'N/A', Icons.bar_chart_rounded),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
+              Divider(thickness: 1.2, color: Colors.teal[100]),
+              const SizedBox(height: 18),
+              // Performance Summary
+              _buildPerformanceSection(),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildMetricsSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Stock Metrics',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
-            ),
-          ),
-          const SizedBox(height: 20),
-          _buildMetricRow('Open', '₹${(_stock.open ?? 0.0).toStringAsFixed(2)}'),
-          _buildMetricRow('High', '₹${(_stock.high ?? 0.0).toStringAsFixed(2)}'),
-          _buildMetricRow('Low', '₹${(_stock.low ?? 0.0).toStringAsFixed(2)}'),
-          _buildMetricRow('Previous Close', '₹${(_stock.close ?? 0.0).toStringAsFixed(2)}'),
-          _buildMetricRow('Volume', _stock.volume.toString()),
-        ],
       ),
     );
   }
@@ -205,18 +236,16 @@ class _StockDetailPageState extends State<StockDetailPage> {
   Widget _buildPerformanceSection() {
     final isPositive = (_stock.changePercent ?? 0.0) >= 0;
     final changeColor = isPositive ? Colors.green : Colors.red;
-    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 2),
+            color: Colors.teal.withOpacity(0.07),
+            blurRadius: 10,
+            offset: Offset(0, 4),
           ),
         ],
       ),
@@ -228,27 +257,61 @@ class _StockDetailPageState extends State<StockDetailPage> {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
+              color: Colors.teal[800],
             ),
           ),
           const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
-                child: _buildPerformanceCard(
-                  'Change',
-                  '₹${_stock.change?.toStringAsFixed(2) ?? 'N/A'}',
-                  changeColor,
-                  Icons.trending_up,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: changeColor.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: changeColor.withOpacity(0.18)),
+                  ),
+                  padding: EdgeInsets.symmetric(vertical: 18),
+                  child: Column(
+                    children: [
+                      Icon(Icons.trending_up, color: changeColor, size: 28),
+                      SizedBox(height: 8),
+                      Text(
+                        'Change',
+                        style: TextStyle(fontSize: 15, color: Colors.grey[600]),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        '₹${_stock.change?.toStringAsFixed(2) ?? 'N/A'}',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: changeColor),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _buildPerformanceCard(
-                  'Change %',
-                  '${(_stock.changePercent ?? 0.0) >= 0 ? '+' : ''}${_stock.changePercent?.toStringAsFixed(2) ?? 'N/A'}%',
-                  changeColor,
-                  Icons.percent,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: changeColor.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: changeColor.withOpacity(0.18)),
+                  ),
+                  padding: EdgeInsets.symmetric(vertical: 18),
+                  child: Column(
+                    children: [
+                      Icon(Icons.percent, color: changeColor, size: 28),
+                      SizedBox(height: 8),
+                      Text(
+                        'Change %',
+                        style: TextStyle(fontSize: 15, color: Colors.grey[600]),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        '${(_stock.changePercent ?? 0.0) >= 0 ? '+' : ''}${_stock.changePercent?.toStringAsFixed(2) ?? 'N/A'}%',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: changeColor),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -258,57 +321,53 @@ class _StockDetailPageState extends State<StockDetailPage> {
     );
   }
 
-  Widget _buildMetricRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+  Widget _buildMetricCard(String label, String value, IconData icon) {
+    return Container(
+      constraints: BoxConstraints(minHeight: 56, maxHeight: 70),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.teal.withOpacity(0.10)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.teal.withOpacity(0.04),
+            blurRadius: 8,
+            offset: Offset(0, 2),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildPerformanceCard(String title, String value, Color color, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.teal[50],
+              borderRadius: BorderRadius.circular(8),
             ),
+            padding: EdgeInsets.all(4),
+            child: Icon(icon, color: Colors.teal[400], size: 18),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: color,
+          SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 13, color: Colors.teal[700], fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.teal[900]),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  softWrap: false,
+                ),
+              ],
             ),
           ),
         ],

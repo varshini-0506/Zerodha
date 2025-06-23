@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'stock_list_page.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(StockApp());

@@ -3,6 +3,7 @@ import 'models/stock_model.dart';
 import 'stock_detail_page.dart';
 import 'watchlist_page.dart';
 import 'services/stock_service.dart';
+import 'news_page.dart';
 
 class StockListPage extends StatefulWidget {
   @override
@@ -162,19 +163,64 @@ class _StockListPageState extends State<StockListPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('All Stocks'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.star, color: Colors.amber),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => WatchlistPage(watchlist: watchlist),
-                ),
-              );
-            },
-          )
-        ],
+      ),
+      drawer: Drawer(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(32),
+            bottomRight: Radius.circular(32),
+          ),
+        ),
+        backgroundColor: Colors.grey[50],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(height: 36),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8),
+              child: Text('MENU', style: TextStyle(color: Colors.teal[700], fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)),
+            ),
+            Divider(),
+            ListTile(
+              leading: Icon(Icons.star, color: Colors.amber),
+              title: Text('Wishlist', style: TextStyle(fontWeight: FontWeight.w500)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              tileColor: ModalRoute.of(context)?.settings.name == '/wishlist' ? Colors.teal[50] : null,
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => WatchlistPage(watchlist: watchlist),
+                    settings: RouteSettings(name: '/wishlist'),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.article, color: Colors.teal),
+              title: Text('News', style: TextStyle(fontWeight: FontWeight.w500)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              tileColor: ModalRoute.of(context)?.settings.name == '/news' ? Colors.teal[50] : null,
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => NewsPage(),
+                    settings: RouteSettings(name: '/news'),
+                  ),
+                );
+              },
+            ),
+            Spacer(),
+            Divider(),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0, left: 20),
+              child: Text('Zerodha Demo App', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
