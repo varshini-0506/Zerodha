@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:xml/xml.dart' as xml;
+import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 
 class NewsPage extends StatefulWidget {
@@ -10,19 +10,25 @@ class NewsPage extends StatefulWidget {
 
 class _NewsPageState extends State<NewsPage> {
   Future<List<NewsItem>> fetchNews() async {
-    final response = await http.get(Uri.parse('https://pulse.zerodha.com/feed.php'));
-    if (response.statusCode == 200) {
-      final document = xml.XmlDocument.parse(response.body);
-      final items = document.findAllElements('item');
-      return items.map((node) {
-        return NewsItem(
-          title: node.findElements('title').single.text,
-          link: node.findElements('link').single.text,
-          description: node.findElements('description').single.text,
-          pubDate: node.findElements('pubDate').isNotEmpty ? node.findElements('pubDate').single.text : '',
-        );
-      }).toList();
-    } else {
+    try {
+      final response = await http.get(Uri.parse('https://zerodha-ay41.onrender.com/api/news'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final newsList = data['news'] as List;
+        return newsList.map((item) {
+          return NewsItem(
+            title: item['title'] ?? '',
+            link: item['link'] ?? '',
+            description: item['description'] ?? '',
+            pubDate: item['pubDate'] ?? '',
+            source: item['source'] ?? 'Unknown',
+          );
+        }).toList();
+      } else {
+        throw Exception('Failed to load news: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching news: $e');
       throw Exception('Failed to load news');
     }
   }
@@ -124,15 +130,24 @@ class _NewsPageState extends State<NewsPage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Icon(Icons.calendar_today, color: Colors.teal[300], size: 16),
-                                SizedBox(width: 6),
-                                Text(
-                                  _formatDate(news.pubDate),
-                                  style: TextStyle(color: Colors.teal[400], fontSize: 13, fontWeight: FontWeight.w500),
-                                ),
-                              ],
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Icon(Icons.calendar_today, color: Colors.teal[300], size: 16),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    _formatDate(news.pubDate),
+                                    style: TextStyle(color: Colors.teal[400], fontSize: 13, fontWeight: FontWeight.w500),
+                                  ),
+                                  SizedBox(width: 16),
+                                  Icon(Icons.source, color: Colors.teal[300], size: 16),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    news.source,
+                                    style: TextStyle(color: Colors.teal[400], fontSize: 13, fontWeight: FontWeight.w500),
+                                  ),
+                                ],
+                              ),
                             ),
                             Icon(Icons.open_in_new, color: Colors.teal, size: 20),
                           ],
@@ -156,5 +171,6 @@ class NewsItem {
   final String link;
   final String description;
   final String pubDate;
-  NewsItem({required this.title, required this.link, required this.description, required this.pubDate});
+  final String source;
+  NewsItem({required this.title, required this.link, required this.description, required this.pubDate, required this.source});
 } 

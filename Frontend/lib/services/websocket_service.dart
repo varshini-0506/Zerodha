@@ -29,7 +29,7 @@ class WebSocketService {
     try {
       // Connect to the WebSocket server
       _channel = WebSocketChannel.connect(
-        Uri.parse('ws://192.168.0.8:6789'), // Use your computer's IP
+        Uri.parse('wss://zerodha-ay41.onrender.com/ws'), // Deployed backend WebSocket
       );
 
       _channel!.stream.listen(

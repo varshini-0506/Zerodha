@@ -2,12 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class StockService {
-  // Update this URL based on your setup:
-  // - Android Emulator: http://10.0.2.2:5000/api
-  // - iOS Simulator: http://localhost:5000/api
-  // - Physical Device (USB): http://192.168.0.8:5000/api (your computer's IP)
-  // - Physical Device (WiFi): http://YOUR_COMPUTER_IP:5000/api
-  static const String baseUrl = 'http://192.168.0.8:5000/api';
+  // Deployed backend URL
+  static const String baseUrl = 'https://zerodha-ay41.onrender.com/api';
   
   // Get all stocks with pagination and search
   static Future<Map<String, dynamic>> getStocks({
