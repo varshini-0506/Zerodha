@@ -3,7 +3,6 @@ import 'models/stock_model.dart';
 import 'services/stock_service.dart';
 import 'widgets/live_price_chart.dart';
 import 'dart:ui';
-import 'package:intl/intl.dart';
 
 class StockDetailPage extends StatefulWidget {
   final Stock stock;
@@ -150,7 +149,7 @@ class _StockDetailPageState extends State<StockDetailPage> {
                           SizedBox(height: 4),
                           if (_stock.quote?['last_trade_time'] != null)
                             Text(
-                              _formatLastTradeTime(_stock.quote!['last_trade_time']),
+                              'Last traded: ${_stock.quote!['last_trade_time']}',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.white.withOpacity(0.85),
@@ -384,15 +383,5 @@ class _StockDetailPageState extends State<StockDetailPage> {
         ],
       ),
     );
-  }
-
-  String _formatLastTradeTime(String lastTradeTime) {
-    try {
-      // Parse RFC 1123/2822 format like 'Wed, 25 Jun 2025 15:59:25 GMT'
-      final dt = DateFormat('EEE, dd MMM yyyy HH:mm:ss', 'en_US').parseUtc(lastTradeTime.replaceAll(' GMT', ''));
-      return 'Last traded: ' + dt.toLocal().toString();
-    } catch (e) {
-      return lastTradeTime;
-    }
   }
 } 
