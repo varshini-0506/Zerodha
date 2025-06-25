@@ -4,4 +4,5 @@ kiteconnect>=4.0.0
 python-dotenv>=0.19.0
 websockets>=10.0
 requests>=2.25.0
-gunicorn==21.2.0 
+gunicorn==21.2.0
+pytz>=2021.1 
