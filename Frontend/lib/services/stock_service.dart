@@ -72,31 +72,6 @@ class StockService {
     }
   }
   
-  // Get real-time quote for a stock
-  static Future<Map<String, dynamic>> getQuote(String symbol) async {
-    try {
-      final uri = Uri.parse('$baseUrl/quote/$symbol');
-      print('Making request to: $uri'); // Debug log
-      final response = await http.get(uri);
-      
-      print('Response status: ${response.statusCode}'); // Debug log
-      print('Response body: ${response.body}'); // Debug log
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        print('Parsed quote data: $data'); // Debug log
-        return data;
-      } else if (response.statusCode == 404) {
-        throw Exception('Quote not available');
-      } else {
-        throw Exception('Failed to load quote: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error in getQuote: $e'); // Debug log
-      throw Exception('Error fetching quote: $e');
-    }
-  }
-  
   // Search stocks
   static Future<List<Map<String, dynamic>>> searchStocks(String query) async {
     try {

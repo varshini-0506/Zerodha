@@ -147,9 +147,9 @@ class _StockDetailPageState extends State<StockDetailPage> {
                             ),
                           ),
                           SizedBox(height: 4),
-                          if (_stock.quote?['timestamp'] != null)
+                          if (_stock.quote?['last_trade_time'] != null)
                             Text(
-                              _formatTimestamp(_stock.quote!['timestamp']),
+                              _formatLastTradeTime(_stock.quote!['last_trade_time']),
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.white.withOpacity(0.85),
@@ -385,13 +385,12 @@ class _StockDetailPageState extends State<StockDetailPage> {
     );
   }
 
-  String _formatTimestamp(String timestamp) {
+  String _formatLastTradeTime(String lastTradeTime) {
     try {
-      // Try parsing as ISO8601 first
-      DateTime dt = DateTime.tryParse(timestamp) ?? DateTime.now();
-      return 'As of ' + dt.toLocal().toString();
+      DateTime dt = DateTime.tryParse(lastTradeTime) ?? DateTime.now();
+      return 'Last traded: ' + dt.toLocal().toString();
     } catch (e) {
-      return timestamp;
+      return lastTradeTime;
     }
   }
 } 

@@ -77,24 +77,9 @@ class _StockListPageState extends State<StockListPage> {
     
     for (final stock in stocksToFetch) {
       try {
-        final quoteData = await StockService.getQuote(stock.symbol);
-        
-        // Create a new Stock with quote data
-        final stockWithQuote = Stock(
-          symbol: stock.symbol,
-          name: stock.name,
-          instrumentToken: stock.instrumentToken,
-          exchange: stock.exchange,
-          instrumentType: stock.instrumentType,
-          segment: stock.segment,
-          expiry: stock.expiry,
-          strike: stock.strike,
-          tickSize: stock.tickSize,
-          lotSize: stock.lotSize,
-          quote: quoteData,
-          historicalData: stock.historicalData,
-          lastUpdated: stock.lastUpdated,
-        );
+        final stockDetail = await StockService.getStockDetail(stock.symbol);
+        // Use the 'quote' field from the stock detail response
+        final stockWithQuote = Stock.fromJson(stockDetail);
         
         stocksWithQuotes.add(stockWithQuote);
         
