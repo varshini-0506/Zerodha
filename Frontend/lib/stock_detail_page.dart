@@ -31,24 +31,10 @@ class _StockDetailPageState extends State<StockDetailPage> {
     });
 
     try {
-      final quote = await StockService.getQuote(_stock.symbol);
-      if (quote != null) {
+      final stockDetail = await StockService.getStockDetail(_stock.symbol);
+      if (stockDetail != null) {
         setState(() {
-          _stock = Stock(
-            symbol: _stock.symbol,
-            name: _stock.name,
-            instrumentToken: _stock.instrumentToken,
-            exchange: _stock.exchange,
-            instrumentType: _stock.instrumentType,
-            segment: _stock.segment,
-            expiry: _stock.expiry,
-            strike: _stock.strike,
-            tickSize: _stock.tickSize,
-            lotSize: _stock.lotSize,
-            quote: quote,
-            historicalData: _stock.historicalData,
-            lastUpdated: _stock.lastUpdated,
-          );
+          _stock = Stock.fromJson(stockDetail);
         });
       }
     } catch (e) {
@@ -195,18 +181,18 @@ class _StockDetailPageState extends State<StockDetailPage> {
                     // Row 1: High, Low
                     Row(
                       children: [
-                        Flexible(child: _buildMetricCard('High', '₹${(_stock.high ?? 0.0).toStringAsFixed(2)}', Icons.trending_up_rounded)),
+                        Flexible(child: _buildMetricCard('High', '₹${(_stock.ohlc?['high'] ?? 0.0).toStringAsFixed(2)}', Icons.trending_up_rounded)),
                         SizedBox(width: 8),
-                        Flexible(child: _buildMetricCard('Low', '₹${(_stock.low ?? 0.0).toStringAsFixed(2)}', Icons.trending_down_rounded)),
+                        Flexible(child: _buildMetricCard('Low', '₹${(_stock.ohlc?['low'] ?? 0.0).toStringAsFixed(2)}', Icons.trending_down_rounded)),
                       ],
                     ),
                     SizedBox(height: 10),
                     // Row 2: Open, Prev. Close
                     Row(
                       children: [
-                        Flexible(child: _buildMetricCard('Open', '₹${(_stock.open ?? 0.0).toStringAsFixed(2)}', Icons.play_arrow_rounded)),
+                        Flexible(child: _buildMetricCard('Open', '₹${(_stock.ohlc?['open'] ?? 0.0).toStringAsFixed(2)}', Icons.play_arrow_rounded)),
                         SizedBox(width: 8),
-                        Flexible(child: _buildMetricCard('Prev. Close', '₹${(_stock.close ?? 0.0).toStringAsFixed(2)}', Icons.close_rounded)),
+                        Flexible(child: _buildMetricCard('Prev. Close', '₹${(_stock.ohlc?['close'] ?? 0.0).toStringAsFixed(2)}', Icons.close_rounded)),
                       ],
                     ),
                     SizedBox(height: 10),

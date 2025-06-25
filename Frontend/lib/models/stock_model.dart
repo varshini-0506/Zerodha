@@ -12,6 +12,13 @@ class Stock {
   final Map<String, dynamic>? quote;
   final List<Map<String, dynamic>>? historicalData;
   final String? lastUpdated;
+  final double? lastPrice;
+  final int? lastQuantity;
+  final String? lastTradeTime;
+  final double? lowerCircuitLimit;
+  final double? netChange;
+  final Map<String, dynamic>? ohlc;
+  final int? volume;
 
   Stock({
     required this.symbol,
@@ -27,6 +34,13 @@ class Stock {
     this.quote,
     this.historicalData,
     this.lastUpdated,
+    this.lastPrice,
+    this.lastQuantity,
+    this.lastTradeTime,
+    this.lowerCircuitLimit,
+    this.netChange,
+    this.ohlc,
+    this.volume,
   });
 
   factory Stock.fromJson(Map<String, dynamic> json) {
@@ -46,6 +60,13 @@ class Stock {
           ? List<Map<String, dynamic>>.from(json['historical_data'])
           : null,
       lastUpdated: json['last_updated'],
+      lastPrice: (json['last_price'] ?? json['quote']?['last_price'])?.toDouble(),
+      lastQuantity: json['last_quantity'] ?? json['quote']?['last_quantity'],
+      lastTradeTime: json['last_trade_time'] ?? json['quote']?['last_trade_time'],
+      lowerCircuitLimit: (json['lower_circuit_limit'] ?? json['quote']?['lower_circuit_limit'])?.toDouble(),
+      netChange: (json['net_change'] ?? json['quote']?['net_change'])?.toDouble(),
+      ohlc: json['ohlc'] ?? json['quote']?['ohlc'],
+      volume: json['volume'] ?? json['quote']?['volume'],
     );
   }
 
@@ -64,12 +85,17 @@ class Stock {
       'quote': quote,
       'historical_data': historicalData,
       'last_updated': lastUpdated,
+      'last_price': lastPrice,
+      'last_quantity': lastQuantity,
+      'last_trade_time': lastTradeTime,
+      'lower_circuit_limit': lowerCircuitLimit,
+      'net_change': netChange,
+      'ohlc': ohlc,
+      'volume': volume,
     };
   }
 
   // Helper methods to get quote data
-  double? get lastPrice => quote?['last_price']?.toDouble();
-  int? get volume => quote?['volume'];
   double? get change => quote?['change']?.toDouble();
   double? get high => quote?['high']?.toDouble();
   double? get low => quote?['low']?.toDouble();

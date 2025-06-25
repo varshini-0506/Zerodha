@@ -6,7 +6,6 @@ import json
 import threading
 import os
 from typing import Dict, List, Optional
-import pytz  # For timezone handling
 from datetime import datetime, timedelta, time
 
 # Third-party imports
@@ -217,7 +216,6 @@ def get_stock_detail(symbol):
 
 from flask import jsonify
 from datetime import datetime, timedelta, time
-import pytz
 
 @app.route('/api/quote/<symbol>', methods=['GET'])
 def get_quote(symbol):
