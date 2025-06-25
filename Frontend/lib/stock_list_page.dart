@@ -356,8 +356,12 @@ class _StockListPageState extends State<StockListPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (hasQuoteData)
-                  Text('₹${stock.lastPrice?.toStringAsFixed(2) ?? 'N/A'} | ${stock.changePercent?.toStringAsFixed(2) ?? 'N/A'}% | ${stock.rating} | ${stock.sector}',
-                      style: TextStyle(color: Colors.grey[600])),
+                  Text(
+                    '₹${stock.lastPrice?.toStringAsFixed(2) ?? 'N/A'} | '
+                    '${stock.quote?['change_percent'] != null ? (stock.quote!['change_percent'] >= 0 ? '+' : '') + stock.quote!['change_percent'].toStringAsFixed(2) : 'N/A'}% | '
+                    '${stock.rating} | ${stock.sector}',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
                 if (!hasQuoteData)
                   Text('Quote data loading... | ${stock.sector}',
                       style: TextStyle(color: Colors.grey[600])),

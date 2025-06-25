@@ -3,6 +3,7 @@ import 'models/stock_model.dart';
 import 'services/stock_service.dart';
 import 'widgets/live_price_chart.dart';
 import 'dart:ui';
+import 'package:intl/intl.dart';
 
 class StockDetailPage extends StatefulWidget {
   final Stock stock;
@@ -387,7 +388,8 @@ class _StockDetailPageState extends State<StockDetailPage> {
 
   String _formatLastTradeTime(String lastTradeTime) {
     try {
-      DateTime dt = DateTime.tryParse(lastTradeTime) ?? DateTime.now();
+      // Parse RFC 1123/2822 format like 'Wed, 25 Jun 2025 15:59:25 GMT'
+      final dt = DateFormat('EEE, dd MMM yyyy HH:mm:ss', 'en_US').parseUtc(lastTradeTime.replaceAll(' GMT', ''));
       return 'Last traded: ' + dt.toLocal().toString();
     } catch (e) {
       return lastTradeTime;
