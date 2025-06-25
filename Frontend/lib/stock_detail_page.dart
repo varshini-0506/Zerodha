@@ -134,14 +134,29 @@ class _StockDetailPageState extends State<StockDetailPage> {
                     TweenAnimationBuilder<double>(
                       tween: Tween<double>(begin: 0, end: (_stock.lastPrice ?? 0.0)),
                       duration: Duration(milliseconds: 900),
-                      builder: (context, value, child) => Text(
-                        '₹${value.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 38,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 1.2,
-                        ),
+                      builder: (context, value, child) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '₹${value.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 38,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          if (_stock.quote?['timestamp'] != null)
+                            Text(
+                              _formatTimestamp(_stock.quote!['timestamp']),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white.withOpacity(0.85),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -220,7 +235,16 @@ class _StockDetailPageState extends State<StockDetailPage> {
   }
 
   Widget _buildPerformanceSection() {
-    final isPositive = (_stock.changePercent ?? 0.0) >= 0;
+    // Prefer backend-provided change and change_percent, fallback to calculated if needed
+    final double? change = _stock.quote?['change']?.toDouble() ??
+        (_stock.lastPrice != null && _stock.ohlc?['close'] != null
+            ? _stock.lastPrice! - _stock.ohlc!['close']
+            : null);
+    final double? changePercent = _stock.quote?['change_percent']?.toDouble() ??
+        (_stock.lastPrice != null && _stock.ohlc?['close'] != null && _stock.ohlc!['close'] != 0
+            ? ((_stock.lastPrice! - _stock.ohlc!['close']) / _stock.ohlc!['close']) * 100
+            : null);
+    final isPositive = (changePercent ?? 0.0) >= 0;
     final changeColor = isPositive ? Colors.green : Colors.red;
     return Container(
       padding: const EdgeInsets.all(20),
@@ -267,7 +291,7 @@ class _StockDetailPageState extends State<StockDetailPage> {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        '₹${_stock.change?.toStringAsFixed(2) ?? 'N/A'}',
+                        '₹${change != null ? change.toStringAsFixed(2) : 'N/A'}',
                         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: changeColor),
                       ),
                     ],
@@ -293,7 +317,7 @@ class _StockDetailPageState extends State<StockDetailPage> {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        '${(_stock.changePercent ?? 0.0) >= 0 ? '+' : ''}${_stock.changePercent?.toStringAsFixed(2) ?? 'N/A'}%',
+                        '${changePercent != null ? (changePercent >= 0 ? '+' : '') + changePercent.toStringAsFixed(2) : 'N/A'}%',
                         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: changeColor),
                       ),
                     ],
@@ -359,5 +383,15 @@ class _StockDetailPageState extends State<StockDetailPage> {
         ],
       ),
     );
+  }
+
+  String _formatTimestamp(String timestamp) {
+    try {
+      // Try parsing as ISO8601 first
+      DateTime dt = DateTime.tryParse(timestamp) ?? DateTime.now();
+      return 'As of ' + dt.toLocal().toString();
+    } catch (e) {
+      return timestamp;
+    }
   }
 } 
