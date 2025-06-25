@@ -5,8 +5,9 @@ import asyncio
 import json
 import threading
 import os
-from datetime import datetime
 from typing import Dict, List, Optional
+import pytz  # For timezone handling
+from datetime import datetime, timedelta, time
 
 # Third-party imports
 from flask import Flask, jsonify, request
@@ -214,32 +215,41 @@ def get_stock_detail(symbol):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+from flask import jsonify
+from datetime import datetime, timedelta, time
+import pytz
+
 @app.route('/api/quote/<symbol>', methods=['GET'])
 def get_quote(symbol):
-    """Get real-time quote for a specific symbol"""
     try:
-        # Get instrument token for symbol
+        # Get instrument token
         instruments = get_all_instruments()
         instrument_token = None
-        
         for inst in instruments:
             if inst['tradingsymbol'] == symbol.upper():
                 instrument_token = inst['instrument_token']
                 break
-        
         if not instrument_token:
             return jsonify({"error": "Symbol not found"}), 404
-        
-        # Get quote from latest ticks if available
-        if instrument_token in latest_ticks:
-            return jsonify(latest_ticks[instrument_token])
-        
-        # If not in latest ticks, get from API
-        try:
-            quote = kite.quote(f"NSE:{symbol.upper()}")
-            if f"NSE:{symbol.upper()}" in quote:
-                kite_data = quote[f"NSE:{symbol.upper()}"]
-                # Convert Zerodha API format to our format
+
+        ist = pytz.timezone('Asia/Kolkata')
+        now = datetime.now(ist)
+        market_open = time(9, 15)
+        market_close = time(15, 30)
+
+        # Determine the target trading day's date
+        target_day = now.date()
+        if now.time() < market_open:
+            # Before market opens — fallback to previous trading day
+            target_day -= timedelta(days=1)
+        elif now.time() > market_close:
+            # After market closes — use today's last candle
+            pass
+        else:
+            # During market hours — fetch live quote
+            try:
+                quote = kite.quote(f"NSE:{symbol.upper()}")
+                kite_data = quote.get(f"NSE:{symbol.upper()}", {})
                 formatted_quote = {
                     "instrument_token": instrument_token,
                     "last_price": kite_data.get("last_price", 0),
@@ -249,26 +259,45 @@ def get_quote(symbol):
                     "low": kite_data.get("ohlc", {}).get("low", 0),
                     "open": kite_data.get("ohlc", {}).get("open", 0),
                     "close": kite_data.get("ohlc", {}).get("close", 0),
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": kite_data.get("last_trade_time", now).isoformat()
                 }
                 return jsonify(formatted_quote)
-        except Exception as e:
-            print(f"Error fetching quote from Kite API: {e}")
-        
-        # If all else fails, return sample data for testing
-        sample_quote = {
-            "instrument_token": instrument_token,
-            "last_price": 100.0 + (hash(symbol) % 1000),  # Generate a pseudo-random price
-            "volume": 1000000 + (hash(symbol) % 5000000),
-            "change": (hash(symbol) % 20) - 10,  # Random change between -10 and +10
-            "high": 110.0 + (hash(symbol) % 50),
-            "low": 90.0 + (hash(symbol) % 20),
-            "open": 95.0 + (hash(symbol) % 30),
-            "close": 98.0 + (hash(symbol) % 40),
-            "timestamp": datetime.now().isoformat()
-        }
-        return jsonify(sample_quote)
-    
+            except Exception as e:
+                print(f"Live quote error: {e}")
+                # fallback to historical if live fails
+
+        # === Historical fallback for today or previous trading day ===
+        # Skip weekends
+        while target_day.weekday() >= 5:
+            target_day -= timedelta(days=1)
+
+        from_date = ist.localize(datetime.combine(target_day, time(9, 15)))
+        to_date = ist.localize(datetime.combine(target_day, time(15, 30)))
+
+        candles = kite.historical_data(
+            instrument_token,
+            from_date,
+            to_date,
+            interval="day"
+        )
+
+        if candles:
+            last_candle = candles[-1]
+            formatted_quote = {
+                "instrument_token": instrument_token,
+                "last_price": last_candle["close"],
+                "volume": last_candle["volume"],
+                "change": round(((last_candle["close"] - last_candle["open"]) / last_candle["open"]) * 100, 2),
+                "high": last_candle["high"],
+                "low": last_candle["low"],
+                "open": last_candle["open"],
+                "close": last_candle["close"],
+                "timestamp": last_candle["date"].isoformat()
+            }
+            return jsonify(formatted_quote)
+
+        return jsonify({"error": "No candle data found"}), 404
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
