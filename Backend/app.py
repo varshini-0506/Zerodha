@@ -15,6 +15,7 @@ from flask_cors import CORS
 import websockets
 from kiteconnect import KiteConnect, KiteTicker
 from dotenv import load_dotenv
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -40,8 +41,14 @@ latest_ticks = {}
 instruments_cache = {}
 instruments_cache_timestamp = None
 
-# In-memory wishlist storage: {user_id: set of stock symbols}
-wishlist_db = {}
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+SUPABASE_WISHLIST_ENDPOINT = f'{SUPABASE_URL}/rest/v1/wishlist'
+SUPABASE_HEADERS = {
+    'apikey': SUPABASE_SERVICE_ROLE_KEY,
+    'Authorization': f'Bearer {SUPABASE_SERVICE_ROLE_KEY}',
+    'Content-Type': 'application/json'
+}
 
 def get_all_instruments():
     """Get all available instruments from NSE"""
@@ -369,22 +376,29 @@ def get_news():
 
 @app.route('/api/wishlist', methods=['POST'])
 def add_to_wishlist():
-    """Add a stock to a user's wishlist"""
+    """Add a stock to a user's wishlist in Supabase"""
     data = request.get_json()
     user_id = data.get('user_id')
     symbol = data.get('symbol')
     if not user_id or not symbol:
         return jsonify({'error': 'user_id and symbol are required'}), 400
-    if user_id not in wishlist_db:
-        wishlist_db[user_id] = set()
-    wishlist_db[user_id].add(symbol)
-    return jsonify({'message': f'Stock {symbol} added to wishlist for user {user_id}.'}), 200
+    payload = {'user_id': user_id, 'symbol': symbol}
+    response = requests.post(SUPABASE_WISHLIST_ENDPOINT, headers=SUPABASE_HEADERS, json=payload)
+    if response.status_code in (200, 201):
+        return jsonify({'message': f'Stock {symbol} added to wishlist for user {user_id}.'}), 200
+    else:
+        return jsonify({'error': response.text}), response.status_code
 
 @app.route('/api/wishlist/<user_id>', methods=['GET'])
 def get_wishlist(user_id):
-    """Get all wishlisted stocks for a particular user"""
-    symbols = list(wishlist_db.get(user_id, []))
-    return jsonify({'user_id': user_id, 'wishlist': symbols}), 200
+    """Get all wishlisted stocks for a particular user from Supabase"""
+    params = {'user_id': f'eq.{user_id}'}
+    response = requests.get(SUPABASE_WISHLIST_ENDPOINT, headers=SUPABASE_HEADERS, params=params)
+    if response.status_code == 200:
+        wishlist = [item['symbol'] for item in response.json()]
+        return jsonify({'user_id': user_id, 'wishlist': wishlist}), 200
+    else:
+        return jsonify({'error': response.text}), response.status_code
 
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
