@@ -400,6 +400,28 @@ def get_wishlist(user_id):
     else:
         return jsonify({'error': response.text}), response.status_code
 
+@app.route('/api/wishlist', methods=['DELETE'])
+def remove_from_wishlist():
+    """Remove a stock from a user's wishlist in Supabase"""
+    data = request.get_json()
+    user_id = data.get('user_id')
+    symbol = data.get('symbol')
+    if not user_id or not symbol:
+        return jsonify({'error': 'user_id and symbol are required'}), 400
+    params = {
+        'user_id': f'eq.{user_id}',
+        'symbol': f'eq.{symbol}'
+    }
+    response = requests.delete(
+        SUPABASE_WISHLIST_ENDPOINT,
+        headers=SUPABASE_HEADERS,
+        params=params
+    )
+    if response.status_code in (200, 204):
+        return jsonify({'message': f'Stock {symbol} removed from wishlist for user {user_id}.'}), 200
+    else:
+        return jsonify({'error': response.text}), response.status_code
+
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
     for tick in ticks:
