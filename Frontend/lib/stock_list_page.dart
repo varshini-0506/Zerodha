@@ -4,6 +4,8 @@ import 'stock_detail_page.dart';
 import 'watchlist_page.dart';
 import 'services/stock_service.dart';
 import 'news_page.dart';
+import 'auth_service.dart';
+import 'dart:async';
 
 class StockListPage extends StatefulWidget {
   @override
@@ -21,6 +23,7 @@ class _StockListPageState extends State<StockListPage> {
   bool isLoading = true;
   bool hasError = false;
   String errorMessage = '';
+  Set<String> wishlistSymbols = {};
 
   List<String> sectors = ['All', 'Technology', 'Banking & Finance', 'Healthcare', 'Automotive', 'Oil & Gas', 'Power & Energy', 'Others'];
   List<String> ratings = ['All', 'Buy', 'Hold', 'Sell'];
@@ -30,6 +33,7 @@ class _StockListPageState extends State<StockListPage> {
   void initState() {
     super.initState();
     _loadStocks();
+    _loadWishlist();
   }
 
   Future<void> _loadStocks() async {
@@ -66,6 +70,19 @@ class _StockListPageState extends State<StockListPage> {
         hasError = true;
         errorMessage = e.toString();
       });
+    }
+  }
+
+  Future<void> _loadWishlist() async {
+    final user = AuthService().getCurrentUser();
+    if (user == null) return;
+    try {
+      final symbols = await StockService.getWishlist(userId: user.id);
+      setState(() {
+        wishlistSymbols = symbols.toSet();
+      });
+    } catch (e) {
+      // ignore error
     }
   }
 
@@ -143,6 +160,59 @@ class _StockListPageState extends State<StockListPage> {
     }
   }
 
+  Future<void> _confirmAndToggleWishlist(Stock stock) async {
+    final user = AuthService().getCurrentUser();
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please log in to manage your wishlist.')),
+      );
+      return;
+    }
+    final isWishlisted = wishlistSymbols.contains(stock.symbol);
+    final action = isWishlisted ? 'remove' : 'add';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${action == 'add' ? 'Add to' : 'Remove from'} Wishlist'),
+        content: Text('Are you sure you want to ${action == 'add' ? 'add' : 'remove'} ${stock.symbol} ${action == 'add' ? 'to' : 'from'} your wishlist?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Yes'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      if (isWishlisted) {
+        await StockService.removeFromWishlist(userId: user.id, symbol: stock.symbol);
+        setState(() {
+          wishlistSymbols.remove(stock.symbol);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${stock.symbol} removed from wishlist!')),
+        );
+      } else {
+        await StockService.addToWishlist(userId: user.id, symbol: stock.symbol);
+        setState(() {
+          wishlistSymbols.add(stock.symbol);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${stock.symbol} added to wishlist!')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to ${action == 'add' ? 'add to' : 'remove from'} wishlist: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -171,15 +241,16 @@ class _StockListPageState extends State<StockListPage> {
               title: Text('Wishlist', style: TextStyle(fontWeight: FontWeight.w500)),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               tileColor: ModalRoute.of(context)?.settings.name == '/wishlist' ? Colors.teal[50] : null,
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                Navigator.push(
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => WatchlistPage(watchlist: watchlist),
+                    builder: (_) => WatchlistPage(),
                     settings: RouteSettings(name: '/wishlist'),
                   ),
                 );
+                _loadWishlist();
               },
             ),
             ListTile(
@@ -371,17 +442,11 @@ class _StockListPageState extends State<StockListPage> {
             ),
             trailing: IconButton(
               icon: Icon(
-                watchlist.contains(stock) ? Icons.star : Icons.star_border,
-                color: watchlist.contains(stock) ? Colors.amber : Colors.teal,
+                wishlistSymbols.contains(stock.symbol) ? Icons.star : Icons.star_border,
+                color: wishlistSymbols.contains(stock.symbol) ? Colors.amber : Colors.teal,
               ),
               onPressed: () {
-                setState(() {
-                  if (!watchlist.contains(stock)) {
-                    watchlist.add(stock);
-                  } else {
-                    watchlist.remove(stock);
-                  }
-                });
+                _confirmAndToggleWishlist(stock);
               },
             ),
             onTap: () => Navigator.push(

@@ -104,4 +104,42 @@ class StockService {
       throw Exception('Error fetching market status: $e');
     }
   }
+
+  // Add a stock to the user's wishlist
+  static Future<void> addToWishlist({required String userId, required String symbol}) async {
+    final url = Uri.parse('$baseUrl/wishlist');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'user_id': userId, 'symbol': symbol}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to add to wishlist: ${response.body}');
+    }
+  }
+
+  // Get all wishlisted stocks for a user (returns list of symbols)
+  static Future<List<String>> getWishlist({required String userId}) async {
+    final url = Uri.parse('$baseUrl/wishlist/$userId');
+    final response = await http.get(url);
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return List<String>.from(data['wishlist'] ?? []);
+    } else {
+      throw Exception('Failed to fetch wishlist: ${response.body}');
+    }
+  }
+
+  // Remove a stock from the user's wishlist
+  static Future<void> removeFromWishlist({required String userId, required String symbol}) async {
+    final url = Uri.parse('$baseUrl/wishlist');
+    final response = await http.delete(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'user_id': userId, 'symbol': symbol}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to remove from wishlist: ${response.body}');
+    }
+  }
 } 
