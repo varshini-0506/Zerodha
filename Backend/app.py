@@ -40,6 +40,9 @@ latest_ticks = {}
 instruments_cache = {}
 instruments_cache_timestamp = None
 
+# In-memory wishlist storage: {user_id: set of stock symbols}
+wishlist_db = {}
+
 def get_all_instruments():
     """Get all available instruments from NSE"""
     global instruments_cache, instruments_cache_timestamp
@@ -363,6 +366,25 @@ def get_news():
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/wishlist', methods=['POST'])
+def add_to_wishlist():
+    """Add a stock to a user's wishlist"""
+    data = request.get_json()
+    user_id = data.get('user_id')
+    symbol = data.get('symbol')
+    if not user_id or not symbol:
+        return jsonify({'error': 'user_id and symbol are required'}), 400
+    if user_id not in wishlist_db:
+        wishlist_db[user_id] = set()
+    wishlist_db[user_id].add(symbol)
+    return jsonify({'message': f'Stock {symbol} added to wishlist for user {user_id}.'}), 200
+
+@app.route('/api/wishlist/<user_id>', methods=['GET'])
+def get_wishlist(user_id):
+    """Get all wishlisted stocks for a particular user"""
+    symbols = list(wishlist_db.get(user_id, []))
+    return jsonify({'user_id': user_id, 'wishlist': symbols}), 200
 
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
