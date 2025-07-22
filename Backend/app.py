@@ -22,7 +22,7 @@ from supabase import create_client, Client
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Get credentials from environment variables
 API_KEY = os.getenv('KITE_API_KEY')

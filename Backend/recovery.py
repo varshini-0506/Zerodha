@@ -11,6 +11,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from kiteconnect import KiteConnect
 from supabase import create_client, Client
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import StaleElementReferenceException
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -47,7 +49,23 @@ try:
 
     # Step 3: Generate TOTP and submit
     totp = pyotp.TOTP(TOTP_SECRET).now()
-    wait.until(EC.presence_of_element_located((By.ID, "totp"))).send_keys(totp)
+    for attempt in range(2):  # Try twice
+        try:
+            ext_totp_field = wait.until(EC.element_to_be_clickable((By.ID, "userid")))
+            print("Found External TOTP field (id='userid'), clicking and entering TOTP...")
+            ext_totp_field.click()
+            time.sleep(0.2)
+            ext_totp_field.clear()
+            ext_totp_field.send_keys(totp)
+            break  # Success, exit loop
+        except StaleElementReferenceException:
+            print("Stale element reference, retrying...")
+            if attempt == 1:
+                raise
+        except Exception as e:
+            print("❌ Could not interact with External TOTP field:", e)
+            raise
+
     driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
 
     # Step 4: Wait for redirect and get request_token
@@ -62,7 +80,11 @@ try:
     print("✅ Access token:", access_token)
 
     # Step 6: Store in Supabase
-    response = supabase.table("tokens").insert({"access_token": access_token}).execute()
+    response = supabase.table("api_tokens").upsert({
+        "service": "zerodha",
+        "access_token": access_token,
+        "created_at": datetime.now().isoformat()
+    }, on_conflict="service").execute()
     print("✅ Saved to Supabase:", response.data)
 
 except Exception as e:
