@@ -16,6 +16,7 @@ import websockets
 from kiteconnect import KiteConnect, KiteTicker
 from dotenv import load_dotenv
 import requests
+from supabase import create_client, Client
 
 # Load environment variables
 load_dotenv()
@@ -25,10 +26,24 @@ CORS(app)
 
 # Get credentials from environment variables
 API_KEY = os.getenv('KITE_API_KEY')
-ACCESS_TOKEN = os.getenv('KITE_ACCESS_TOKEN')
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+def fetch_access_token_from_supabase():
+    """
+    Fetch the latest access token for Zerodha from the Supabase 'api_tokens' table.
+    """
+    response = supabase.table("api_tokens").select("access_token").eq("service", "zerodha").single().execute()
+    if response.data and "access_token" in response.data:
+        return response.data["access_token"]
+    else:
+        raise ValueError("Access token for Zerodha not found in Supabase.")
+
+ACCESS_TOKEN = fetch_access_token_from_supabase()
 
 if not API_KEY or not ACCESS_TOKEN:
-    raise ValueError("Please set KITE_API_KEY and KITE_ACCESS_TOKEN in .env file")
+    raise ValueError("Please set KITE_API_KEY in .env and ensure access token is available in Supabase.")
 
 # Initialize Kite Connect
 kite = KiteConnect(api_key=API_KEY)
@@ -41,8 +56,6 @@ latest_ticks = {}
 instruments_cache = {}
 instruments_cache_timestamp = None
 
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 SUPABASE_WISHLIST_ENDPOINT = f'{SUPABASE_URL}/rest/v1/wishlist'
 SUPABASE_HEADERS = {
     'apikey': SUPABASE_SERVICE_ROLE_KEY,
