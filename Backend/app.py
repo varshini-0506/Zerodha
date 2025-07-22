@@ -17,12 +17,14 @@ from kiteconnect import KiteConnect, KiteTicker
 from dotenv import load_dotenv
 import requests
 from supabase import create_client, Client
+from flask_socketio import SocketIO, emit
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Get credentials from environment variables
 API_KEY = os.getenv('KITE_API_KEY')
@@ -511,52 +513,28 @@ def start_kite_ws():
             import time
             time.sleep(5)
 
-async def ws_handler(websocket, path):
-    print(f"📲 New client connected to path: {path}")
-    try:
-        await websocket.send(json.dumps({
-            "type": "market_status",
-            "data": {
-                "status": "connected",
-                "timestamp": datetime.now().isoformat(),
-                "total_instruments": len(get_all_instruments()),
-                "path": path  # Log the path
-            }
-        }))
-        while True:
-            await asyncio.sleep(0.1)
-            if latest_ticks:
-                ticks_list = list(latest_ticks.values())
-                await websocket.send(json.dumps({
-                    "type": "tick_data",
-                    "data": ticks_list,
-                    "timestamp": datetime.now().isoformat()
-                }))
-    except websockets.exceptions.ConnectionClosed:
-        print("❌ Client disconnected")
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-        try:
-            await websocket.close()
-        except:
-            pass
+def background_tick_sender():
+    import time
+    while True:
+        if latest_ticks:
+            ticks_list = list(latest_ticks.values())
+            socketio.emit('tick_data', {'data': ticks_list, 'timestamp': datetime.now().isoformat()})
+        time.sleep(0.1)
 
-def start_websocket_server():
-    """Start WebSocket server for Flutter clients"""
-    async def run_server():
-        print("🟢 WebSocket server starting on ws://0.0.0.0:6789")
-        async with websockets.serve(ws_handler, "0.0.0.0", 6789):
-            await asyncio.Future()  # Keeps the server running forever
-
-    asyncio.run(run_server())
+@socketio.on('connect')
+def handle_connect():
+    emit('market_status', {
+        "status": "connected",
+        "timestamp": datetime.now().isoformat(),
+        "total_instruments": len(get_all_instruments())
+    })
 
 if __name__ == "__main__":
     print("Starting Zerodha WebSocket streamer...")
     # Start WebSocket connection to Kite
     threading.Thread(target=start_kite_ws, daemon=True).start()
-    # Start WebSocket server for clients
-    threading.Thread(target=start_websocket_server, daemon=True).start()
-    # Start Flask server
-    #app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    # Start background tick sender for SocketIO
+    threading.Thread(target=background_tick_sender, daemon=True).start()
+    # Start Flask-SocketIO server
+    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 

@@ -10,3 +10,5 @@ pyotp
 supabase
 webdriver-manager 
 gunicorn
+flask-socketio
+eventlet
