@@ -11,4 +11,5 @@ supabase
 webdriver-manager 
 gunicorn
 flask-socketio
-eventlet
+gevent
+dnspython==2.2.1
