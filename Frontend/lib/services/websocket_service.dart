@@ -1,10 +1,9 @@
-import 'dart:convert';
 import 'dart:async';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class WebSocketService {
   static WebSocketService? _instance;
-  WebSocketChannel? _channel;
+  IO.Socket? _socket;
   StreamController<Map<String, dynamic>>? _priceController;
   bool _isConnected = false;
   
@@ -27,55 +26,39 @@ class WebSocketService {
     if (_isConnected) return;
 
     try {
-      // Connect to the WebSocket server
-      _channel = WebSocketChannel.connect(
-        Uri.parse('wss://zerodha-ay41.onrender.com/ws'), // Deployed backend WebSocket
-      );
+      _socket = IO.io('https://zerodha-ay41.onrender.com', <String, dynamic>{
+        'transports': ['websocket'],
+        'autoConnect': true,
+      });
 
-      _channel!.stream.listen(
-        (data) {
-          _handleMessage(data);
-        },
-        onError: (error) {
-          print('WebSocket error: $error');
-          _isConnected = false;
-          _reconnect();
-        },
-        onDone: () {
-          print('WebSocket connection closed');
-          _isConnected = false;
-          _reconnect();
-        },
-      );
+      _socket!.on('connect', (_) {
+        _isConnected = true;
+        print('Socket.IO connected successfully');
+      });
 
-      _isConnected = true;
-      print('WebSocket connected successfully');
-    } catch (e) {
-      print('Failed to connect to WebSocket: $e');
-      _isConnected = false;
-    }
-  }
+      _socket!.on('disconnect', (_) {
+        _isConnected = false;
+        print('Socket.IO connection closed');
+        _reconnect();
+      });
 
-  void _handleMessage(dynamic data) {
-    print('🔌 WebSocket received raw data: $data'); // Debug print
-    try {
-      final message = json.decode(data);
-      print('📦 Parsed message type: ${message['type']}');
-      
-      if (message['type'] == 'tick_data') {
-        final tickData = message['data'] as List;
-        print('📊 Received ${tickData.length} tick records');
-        
-        for (final tick in tickData) {
-          print('📈 Processing tick: ${tick['symbol']} - ${tick['last_price']}');
-          _priceController?.add(tick);
+      _socket!.on('tick_data', (data) {
+        print('📊 Received tick_data: ${data['data']?.length ?? 0} records');
+        final tickData = data['data'] as List?;
+        if (tickData != null) {
+          for (final tick in tickData) {
+            print('📈 Processing tick: ${tick['symbol']} - ${tick['last_price']}');
+            _priceController?.add(Map<String, dynamic>.from(tick));
+          }
         }
-      } else if (message['type'] == 'market_status') {
-        print('📡 Market status: ${message['data']}');
-      }
+      });
+
+      _socket!.on('market_status', (data) {
+        print('📡 Market status: $data');
+      });
     } catch (e) {
-      print('❌ Error handling WebSocket message: $e');
-      print('Raw data was: $data');
+      print('Failed to connect to Socket.IO: $e');
+      _isConnected = false;
     }
   }
 
@@ -89,7 +72,7 @@ class WebSocketService {
   }
 
   void disconnect() {
-    _channel?.sink.close();
+    _socket?.disconnect();
     _priceController?.close();
     _isConnected = false;
   }
