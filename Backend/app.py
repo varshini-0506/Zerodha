@@ -641,7 +641,7 @@ if __name__ == "__main__":
     print("Starting Zerodha WebSocket streamer...")
     # Start APScheduler for daily token recovery via HTTP POST to deployed backend
     scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
-    scheduler.add_job(scheduled_call_recover_token, 'cron', hour=16, minute=5)
+    scheduler.add_job(scheduled_call_recover_token, 'cron', hour=16, minute=30)
     scheduler.start()
     # Start WebSocket connection to Kite
     threading.Thread(target=start_kite_ws, daemon=True).start()
