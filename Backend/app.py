@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 import requests
 from supabase import create_client, Client
 from flask_socketio import SocketIO, emit
+from recovery import recover_zerodha_access_token
 
 # Load environment variables
 load_dotenv()
@@ -523,6 +524,12 @@ def remove_from_wishlist():
         return jsonify({'message': f'Stock {symbol} removed from wishlist for user {user_id}.'}), 200
     else:
         return jsonify({'error': response.text}), response.status_code
+
+@app.route('/api/recover_zerodha_token', methods=['POST'])
+def recover_zerodha_token_route():
+    """Recover Zerodha access token and store in Supabase"""
+    result = recover_zerodha_access_token()
+    return jsonify(result)
 
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
