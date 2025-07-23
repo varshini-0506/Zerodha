@@ -419,18 +419,18 @@ def get_wishlist(user_id):
 def get_wishlist_details(user_id):
     """Get all wishlisted stocks for a user, including full stock details for each symbol."""
     try:
-        # Fetch wishlist symbols from Supabase
+        print(f"Fetching wishlist details for user: {user_id}")
         params = {'user_id': f'eq.{user_id}'}
         response = requests.get(SUPABASE_WISHLIST_ENDPOINT, headers=SUPABASE_HEADERS, params=params)
         if response.status_code != 200:
+            print("Supabase error:", response.text)
             return jsonify({'error': response.text}), response.status_code
         wishlist = [item['symbol'] for item in response.json()]
-        # Fetch stock details for each symbol
+        print(f"Wishlist symbols: {wishlist}")
         stock_details = []
         for symbol in wishlist:
-            # Use the same logic as get_stock_detail
+            print(f"Processing symbol: {symbol}")
             try:
-                # Get instrument details
                 instruments = get_all_instruments()
                 instrument = None
                 for inst in instruments:
@@ -438,8 +438,8 @@ def get_wishlist_details(user_id):
                         instrument = inst
                         break
                 if not instrument:
-                    continue  # Skip if not found
-                # Get quote data
+                    print(f"Instrument not found for symbol: {symbol}")
+                    continue
                 quote_data = None
                 try:
                     quote = kite.quote(f"NSE:{symbol.upper()}")
@@ -457,7 +457,6 @@ def get_wishlist_details(user_id):
                             quote_data['change_percent'] = change_percent
                 except Exception as e:
                     print(f"Error fetching quote for {symbol}: {e}")
-                # Get historical data (last 30 days)
                 historical_data = None
                 try:
                     from datetime import timedelta
@@ -472,7 +471,6 @@ def get_wishlist_details(user_id):
                     historical_data = historical
                 except Exception as e:
                     print(f"Error fetching historical data for {symbol}: {e}")
-                # Compile detailed stock information
                 stock_detail = {
                     'symbol': instrument['tradingsymbol'],
                     'name': instrument['name'],
@@ -494,6 +492,7 @@ def get_wishlist_details(user_id):
                 continue
         return jsonify({'user_id': user_id, 'wishlist': wishlist, 'stock_details': stock_details}), 200
     except Exception as e:
+        print("Top-level error:", e)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/wishlist', methods=['DELETE'])
