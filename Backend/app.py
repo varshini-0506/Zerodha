@@ -415,6 +415,87 @@ def get_wishlist(user_id):
     else:
         return jsonify({'error': response.text}), response.status_code
 
+@app.route('/api/wishlist/details/<user_id>', methods=['GET'])
+def get_wishlist_details(user_id):
+    """Get all wishlisted stocks for a user, including full stock details for each symbol."""
+    try:
+        # Fetch wishlist symbols from Supabase
+        params = {'user_id': f'eq.{user_id}'}
+        response = requests.get(SUPABASE_WISHLIST_ENDPOINT, headers=SUPABASE_HEADERS, params=params)
+        if response.status_code != 200:
+            return jsonify({'error': response.text}), response.status_code
+        wishlist = [item['symbol'] for item in response.json()]
+        # Fetch stock details for each symbol
+        stock_details = []
+        for symbol in wishlist:
+            # Use the same logic as get_stock_detail
+            try:
+                # Get instrument details
+                instruments = get_all_instruments()
+                instrument = None
+                for inst in instruments:
+                    if inst['tradingsymbol'] == symbol.upper():
+                        instrument = inst
+                        break
+                if not instrument:
+                    continue  # Skip if not found
+                # Get quote data
+                quote_data = None
+                try:
+                    quote = kite.quote(f"NSE:{symbol.upper()}")
+                    if f"NSE:{symbol.upper()}" in quote:
+                        quote_data = quote[f"NSE:{symbol.upper()}"]
+                        last_price = quote_data.get('last_price')
+                        ohlc = quote_data.get('ohlc', {})
+                        close = ohlc.get('close') if ohlc else quote_data.get('close')
+                        if close is None:
+                            close = quote_data.get('close')
+                        if last_price is not None and close not in (None, 0):
+                            change = last_price - close
+                            change_percent = ((last_price - close) / close) * 100 if close != 0 else 0
+                            quote_data['change'] = change
+                            quote_data['change_percent'] = change_percent
+                except Exception as e:
+                    print(f"Error fetching quote for {symbol}: {e}")
+                # Get historical data (last 30 days)
+                historical_data = None
+                try:
+                    from datetime import timedelta
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=30)
+                    historical = kite.historical_data(
+                        instrument_token=instrument['instrument_token'],
+                        from_date=start_date.date(),
+                        to_date=end_date.date(),
+                        interval='day'
+                    )
+                    historical_data = historical
+                except Exception as e:
+                    print(f"Error fetching historical data for {symbol}: {e}")
+                # Compile detailed stock information
+                stock_detail = {
+                    'symbol': instrument['tradingsymbol'],
+                    'name': instrument['name'],
+                    'instrument_token': instrument['instrument_token'],
+                    'exchange': instrument['exchange'],
+                    'instrument_type': instrument['instrument_type'],
+                    'segment': instrument['segment'],
+                    'expiry': instrument['expiry'],
+                    'strike': instrument['strike'],
+                    'tick_size': instrument['tick_size'],
+                    'lot_size': instrument['lot_size'],
+                    'quote': quote_data,
+                    'historical_data': historical_data,
+                    'last_updated': datetime.now().isoformat()
+                }
+                stock_details.append(stock_detail)
+            except Exception as e:
+                print(f"Error processing wishlist symbol {symbol}: {e}")
+                continue
+        return jsonify({'user_id': user_id, 'wishlist': wishlist, 'stock_details': stock_details}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/wishlist', methods=['DELETE'])
 def remove_from_wishlist():
     """Remove a stock from a user's wishlist in Supabase"""
