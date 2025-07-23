@@ -19,6 +19,7 @@ import requests
 from supabase import create_client, Client
 from flask_socketio import SocketIO, emit
 from recovery import recover_zerodha_access_token
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # Load environment variables
 load_dotenv()
@@ -524,6 +525,8 @@ def recover_zerodha_token_route():
     result = recover_zerodha_access_token()
     return jsonify(result)
 
+
+
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
     for tick in ticks:
@@ -616,8 +619,23 @@ def handle_connect():
         "total_instruments": len(get_all_instruments())
     })
 
+def scheduled_call_recover_token():
+    """Scheduled job to call the deployed /api/recover_zerodha_token route."""
+    import requests
+    from datetime import datetime
+    url = "https://zerodha-ay41.onrender.com/api/recover_zerodha_token"
+    try:
+        response = requests.post(url)
+        print(f"[APScheduler] {datetime.now().isoformat()} - Called /api/recover_zerodha_token: Status {response.status_code}, Response: {response.text}")
+    except Exception as e:
+        print(f"[APScheduler] {datetime.now().isoformat()} - Error calling /api/recover_zerodha_token: {e}")
+
 if __name__ == "__main__":
     print("Starting Zerodha WebSocket streamer...")
+    # Start APScheduler for daily token recovery via HTTP POST to deployed backend
+    scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
+    scheduler.add_job(scheduled_call_recover_token, 'cron', hour=16, minute=5)
+    scheduler.start()
     # Start WebSocket connection to Kite
     threading.Thread(target=start_kite_ws, daemon=True).start()
     # Start background tick sender for SocketIO
