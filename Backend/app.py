@@ -8,6 +8,7 @@ import os
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta, time
 import pytz
+import traceback
 
 # Third-party imports
 from flask import Flask, jsonify, request
@@ -427,11 +428,13 @@ def get_wishlist_details(user_id):
             return jsonify({'error': response.text}), response.status_code
         wishlist = [item['symbol'] for item in response.json()]
         print(f"Wishlist symbols: {wishlist}")
+        print(f"Wishlist length: {len(wishlist)}")
         stock_details = []
         for symbol in wishlist:
             print(f"Processing symbol: {symbol}")
             try:
                 instruments = get_all_instruments()
+                print(f"Number of instruments: {len(instruments)}")
                 instrument = None
                 for inst in instruments:
                     if inst['tradingsymbol'] == symbol.upper():
@@ -441,36 +444,38 @@ def get_wishlist_details(user_id):
                     print(f"Instrument not found for symbol: {symbol}")
                     continue
                 quote_data = None
-                try:
-                    quote = kite.quote(f"NSE:{symbol.upper()}")
-                    if f"NSE:{symbol.upper()}" in quote:
-                        quote_data = quote[f"NSE:{symbol.upper()}"]
-                        last_price = quote_data.get('last_price')
-                        ohlc = quote_data.get('ohlc', {})
-                        close = ohlc.get('close') if ohlc else quote_data.get('close')
-                        if close is None:
-                            close = quote_data.get('close')
-                        if last_price is not None and close not in (None, 0):
-                            change = last_price - close
-                            change_percent = ((last_price - close) / close) * 100 if close != 0 else 0
-                            quote_data['change'] = change
-                            quote_data['change_percent'] = change_percent
-                except Exception as e:
-                    print(f"Error fetching quote for {symbol}: {e}")
+                # Commenting out kite.quote for debugging recursion
+                # try:
+                #     quote = kite.quote(f"NSE:{symbol.upper()}")
+                #     if f"NSE:{symbol.upper()}" in quote:
+                #         quote_data = quote[f"NSE:{symbol.upper()}"]
+                #         last_price = quote_data.get('last_price')
+                #         ohlc = quote_data.get('ohlc', {})
+                #         close = ohlc.get('close') if ohlc else quote_data.get('close')
+                #         if close is None:
+                #             close = quote_data.get('close')
+                #         if last_price is not None and close not in (None, 0):
+                #             change = last_price - close
+                #             change_percent = ((last_price - close) / close) * 100 if close != 0 else 0
+                #             quote_data['change'] = change
+                #             quote_data['change_percent'] = change_percent
+                # except Exception as e:
+                #     print(f"Error fetching quote for {symbol}: {e}")
                 historical_data = None
-                try:
-                    from datetime import timedelta
-                    end_date = datetime.now()
-                    start_date = end_date - timedelta(days=30)
-                    historical = kite.historical_data(
-                        instrument_token=instrument['instrument_token'],
-                        from_date=start_date.date(),
-                        to_date=end_date.date(),
-                        interval='day'
-                    )
-                    historical_data = historical
-                except Exception as e:
-                    print(f"Error fetching historical data for {symbol}: {e}")
+                # Commenting out kite.historical_data for debugging recursion
+                # try:
+                #     from datetime import timedelta
+                #     end_date = datetime.now()
+                #     start_date = end_date - timedelta(days=30)
+                #     historical = kite.historical_data(
+                #         instrument_token=instrument['instrument_token'],
+                #         from_date=start_date.date(),
+                #         to_date=end_date.date(),
+                #         interval='day'
+                #     )
+                #     historical_data = historical
+                # except Exception as e:
+                #     print(f"Error fetching historical data for {symbol}: {e}")
                 stock_detail = {
                     'symbol': instrument['tradingsymbol'],
                     'name': instrument['name'],
@@ -489,10 +494,12 @@ def get_wishlist_details(user_id):
                 stock_details.append(stock_detail)
             except Exception as e:
                 print(f"Error processing wishlist symbol {symbol}: {e}")
+                traceback.print_exc()
                 continue
         return jsonify({'user_id': user_id, 'wishlist': wishlist, 'stock_details': stock_details}), 200
     except Exception as e:
         print("Top-level error:", e)
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/wishlist', methods=['DELETE'])
