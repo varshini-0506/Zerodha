@@ -25,7 +25,7 @@ from recovery import recover_zerodha_access_token
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, origins="*")
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
 
 # Get credentials from environment variables

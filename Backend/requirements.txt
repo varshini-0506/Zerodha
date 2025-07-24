@@ -1,5 +1,3 @@
-flask
-flask-cors
 kiteconnect
 python-dotenv
 websockets
@@ -10,8 +8,10 @@ selenium
 pyotp
 supabase
 webdriver-manager 
-gunicorn
-flask-socketio
-gevent
-gevent-websocket
 dnspython==2.2.1
+flask==2.3.3
+flask-cors==4.0.0
+flask-socketio==5.3.6
+gevent==23.9.1
+gevent-websocket==0.10.1
+gunicorn==21.2.0
