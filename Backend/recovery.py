@@ -71,7 +71,7 @@ def recover_zerodha_access_token():
         request_token = driver.current_url.split("request_token=")[-1].split("&")[0]
         result["request_token"] = request_token
 
-        # Step 5: Exchange request_token for access_token using KiteConnect
+        # Step 5: Exchange request_token for access_token using-KiteConnect
         kite = KiteConnect(api_key=API_KEY)
         data = kite.generate_session(request_token, api_secret=API_SECRET)
         access_token = data["access_token"]
