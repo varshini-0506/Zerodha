@@ -19,7 +19,8 @@ from dotenv import load_dotenv
 import requests
 from supabase import create_client, Client
 from flask_socketio import SocketIO, emit
-
+from gevent import monkey
+monkey.patch_all()
 # Load environment variables
 load_dotenv()
 
