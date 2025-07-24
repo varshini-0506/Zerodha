@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 import requests
 from supabase import create_client, Client
 from flask_socketio import SocketIO, emit
+from recovery import recover_zerodha_access_token
 
 
 # Load environment variables
@@ -530,13 +531,8 @@ def remove_from_wishlist():
 def recover_zerodha_token_route():
     """Recover Zerodha access token and store in Supabase"""
     try:
-        # For now, return a success message
-        # You can implement the actual recovery logic here later
-        return jsonify({
-            "status": "success",
-            "message": "Token recovery endpoint is working",
-            "timestamp": datetime.now().isoformat()
-        })
+        result = recover_zerodha_access_token()
+        return jsonify(result)
     except Exception as e:
         return jsonify({
             "status": "error",
