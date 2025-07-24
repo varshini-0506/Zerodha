@@ -445,39 +445,39 @@ def get_wishlist_details(user_id):
                 if not instrument:
                     print(f"Instrument not found for symbol: {symbol}")
                     continue
+                # Fetch quote data
                 quote_data = None
-                # Commenting out kite.quote for debugging recursion
-                # try:
-                #     quote = kite.quote(f"NSE:{symbol.upper()}")
-                #     if f"NSE:{symbol.upper()}" in quote:
-                #         quote_data = quote[f"NSE:{symbol.upper()}"]
-                #         last_price = quote_data.get('last_price')
-                #         ohlc = quote_data.get('ohlc', {})
-                #         close = ohlc.get('close') if ohlc else quote_data.get('close')
-                #         if close is None:
-                #             close = quote_data.get('close')
-                #         if last_price is not None and close not in (None, 0):
-                #             change = last_price - close
-                #             change_percent = ((last_price - close) / close) * 100 if close != 0 else 0
-                #             quote_data['change'] = change
-                #             quote_data['change_percent'] = change_percent
-                # except Exception as e:
-                #     print(f"Error fetching quote for {symbol}: {e}")
+                try:
+                    quote = kite.quote(f"NSE:{symbol.upper()}")
+                    if f"NSE:{symbol.upper()}" in quote:
+                        quote_data = quote[f"NSE:{symbol.upper()}"]
+                        last_price = quote_data.get('last_price')
+                        ohlc = quote_data.get('ohlc', {})
+                        close = ohlc.get('close') if ohlc else quote_data.get('close')
+                        if close is None:
+                            close = quote_data.get('close')
+                        if last_price is not None and close not in (None, 0):
+                            change = last_price - close
+                            change_percent = ((last_price - close) / close) * 100 if close != 0 else 0
+                            quote_data['change'] = change
+                            quote_data['change_percent'] = change_percent
+                except Exception as e:
+                    print(f"Error fetching quote for {symbol}: {e}")
+                # Fetch historical data (last 30 days)
                 historical_data = None
-                # Commenting out kite.historical_data for debugging recursion
-                # try:
-                #     from datetime import timedelta
-                #     end_date = datetime.now()
-                #     start_date = end_date - timedelta(days=30)
-                #     historical = kite.historical_data(
-                #         instrument_token=instrument['instrument_token'],
-                #         from_date=start_date.date(),
-                #         to_date=end_date.date(),
-                #         interval='day'
-                #     )
-                #     historical_data = historical
-                # except Exception as e:
-                #     print(f"Error fetching historical data for {symbol}: {e}")
+                try:
+                    from datetime import timedelta
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=30)
+                    historical = kite.historical_data(
+                        instrument_token=instrument['instrument_token'],
+                        from_date=start_date.date(),
+                        to_date=end_date.date(),
+                        interval='day'
+                    )
+                    historical_data = historical
+                except Exception as e:
+                    print(f"Error fetching historical data for {symbol}: {e}")
                 stock_detail = {
                     'symbol': instrument['tradingsymbol'],
                     'name': instrument['name'],
