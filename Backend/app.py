@@ -720,10 +720,7 @@ def handle_connect():
 
 if __name__ == "__main__":
     print("Starting Zerodha WebSocket streamer...")
-    # Start WebSocket connection to Kite
-    threading.Thread(target=start_kite_ws, daemon=True).start()
-    # Start background tick sender for SocketIO
-    threading.Thread(target=background_tick_sender, daemon=True).start()
-    # Start Flask-SocketIO server
+    # Start background tasks using SocketIO's method
+    socketio.start_background_task(start_kite_ws)
+    socketio.start_background_task(background_tick_sender)
     socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
