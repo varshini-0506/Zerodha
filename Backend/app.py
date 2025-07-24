@@ -622,11 +622,25 @@ def start_kite_ws():
 
 def background_tick_sender():
     import time
+    import random
     while True:
-        if latest_ticks:
-            ticks_list = list(latest_ticks.values())
-            socketio.emit('tick_data', {'data': ticks_list, 'timestamp': datetime.now().isoformat()})
-        time.sleep(0.1)
+        tick = {
+            "instrument_token": 123456,
+            "symbol": "RELIANCE",
+            "tradingsymbol": "RELIANCE",
+            "last_price": random.uniform(2800, 2900),
+            "ltp": random.uniform(2800, 2900),
+            "volume": random.randint(100000, 200000),
+            "change": random.uniform(-10, 10),
+            "high": 2860.0,
+            "low": 2820.0,
+            "open": 2830.0,
+            "close": 2837.75,
+            "timestamp": datetime.now().isoformat()
+        }
+        print("[TICK SENDER] Emitting dummy tick_data")
+        socketio.emit('tick_data', {'data': [tick], 'timestamp': datetime.now().isoformat()})
+        time.sleep(1)
 
 @socketio.on('connect')
 def handle_connect():
