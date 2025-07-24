@@ -33,6 +33,7 @@ def recover_zerodha_access_token():
     opts.add_argument("--disable-blink-features=AutomationControlled")
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
     opts.add_experimental_option("useAutomationExtension", False)
+    opts.binary_location = r"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"  # Add this line
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     wait = WebDriverWait(driver, 30)
