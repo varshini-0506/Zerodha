@@ -531,10 +531,8 @@ def remove_from_wishlist():
 @app.route('/api/recover_zerodha_token', methods=['POST'])
 def recover_zerodha_token_route():
     """Recover Zerodha access token and store in Supabase"""
-    import os
     import time
     import pyotp
-    from dotenv import load_dotenv
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.common.by import By
@@ -545,7 +543,6 @@ def recover_zerodha_token_route():
     from supabase import create_client, Client
     from webdriver_manager.chrome import ChromeDriverManager
     from selenium.common.exceptions import StaleElementReferenceException
-    from datetime import datetime
 
     # Load environment variables
     load_dotenv()
