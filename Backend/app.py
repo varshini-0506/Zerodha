@@ -7,7 +7,7 @@ import json
 import threading
 import os
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time , date
 import pytz
 import traceback
 
@@ -34,6 +34,8 @@ API_KEY = os.getenv('KITE_API_KEY')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
+FMP_API_KEY = os.getenv("FMP_API_KEY")
 
 def fetch_access_token_from_supabase():
     """
@@ -563,11 +565,10 @@ def recover_zerodha_token_route():
     opts.add_argument("--disable-blink-features=AutomationControlled")
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
     opts.add_experimental_option("useAutomationExtension", False)
-    opts.add_argument("--headless")
+    # opts.add_argument("--headless")  # Disabled for debugging
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
-    opts.binary_location = "/usr/bin/chromium-browser"
-
+    opts.binary_location ="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     wait = WebDriverWait(driver, 30)
     result = {"success": False, "access_token": None, "error": None, "request_token": None, "supabase_response": None}
@@ -577,35 +578,35 @@ def recover_zerodha_token_route():
         driver.get(login_url)
 
         # Step 2: Enter username and password
-        wait.until(EC.presence_of_element_located((By.ID, "userid"))).send_keys(USER_ID)
+        print("Filling username...")
+        username_field = wait.until(EC.presence_of_element_located((By.ID, "userid")))
+        username_field.send_keys(USER_ID)
+        print("Filling password...")
         driver.find_element(By.ID, "password").send_keys(PASSWORD)
+        print("Submitting login form...")
         driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
 
-        # Step 3: Generate TOTP and submit
+        print("Waiting for TOTP field to be clickable (after page navigation)...")
+        totp_field = wait.until(EC.element_to_be_clickable((By.ID, "userid")))
+        print("TOTP field found, entering TOTP...")
         totp = pyotp.TOTP(TOTP_SECRET).now()
-        for attempt in range(2):  # Try twice
-            try:
-                ext_totp_field = wait.until(EC.element_to_be_clickable((By.ID, "userid")))
-                ext_totp_field.click()
-                time.sleep(0.2)
-                ext_totp_field.clear()
-                ext_totp_field.send_keys(totp)
-                break  # Success, exit loop
-            except StaleElementReferenceException:
-                if attempt == 1:
-                    raise
-            except Exception as e:
-                result["error"] = f"Could not interact with External TOTP field: {e}"
-                raise
-
+        totp_field.clear()
+        totp_field.send_keys(totp)
+        print("TOTP entered, submitting form...")
         driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
 
-        # Step 4: Wait for redirect and get request_token
+        # Wait for the URL to contain 'request_token=' after TOTP submit
+        print("Waiting for request_token in URL...")
         wait.until(lambda d: "request_token=" in d.current_url)
         request_token = driver.current_url.split("request_token=")[-1].split("&")[0]
+        print("Request token found:", request_token)
         result["request_token"] = request_token
 
-        # Step 5: Exchange request_token for access_token using-KiteConnect
+        # Close the browser immediately after extracting the request token
+        driver.quit()
+        driver = None
+
+        # Step 5: Exchange request_token for access_token using KiteConnect
         kite = KiteConnect(api_key=API_KEY)
         data = kite.generate_session(request_token, api_secret=API_SECRET)
         access_token = data["access_token"]
@@ -620,11 +621,53 @@ def recover_zerodha_token_route():
         result["supabase_response"] = response.data
         result["success"] = True
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         result["error"] = str(e)
     finally:
-        time.sleep(2)
-        driver.quit()
+        # Only call driver.quit() if the driver is still open
+        try:
+            if driver is not None:
+                driver.quit()
+        except:
+            pass
     return jsonify(result)
+
+@app.route('/api/stock_events/<symbol>', methods=['GET'])
+def get_combined_stock_events(symbol):
+    today = datetime.today()
+    one_year_ago = today - timedelta(days=365)
+    today_str = today.strftime('%Y-%m-%d')
+    one_year_ago_str = one_year_ago.strftime('%Y-%m-%d')
+
+    # Finnhub URLs
+    earnings_url = f'https://finnhub.io/api/v1/stock/earnings?symbol={symbol}&token={FINNHUB_API_KEY}'
+    ipo_url = f'https://finnhub.io/api/v1/calendar/ipo?from={today_str}&to={(today + timedelta(days=30)).strftime("%Y-%m-%d")}&token={FINNHUB_API_KEY}'
+
+    # FMP URLs
+    base_fmp_url = "https://financialmodelingprep.com/api/v3"
+    dividends_url = f"{base_fmp_url}/historical-price-full/stock_dividend/{symbol}?apikey={FMP_API_KEY}"
+    splits_url = f"{base_fmp_url}/historical-price-full/stock_split/{symbol}?apikey={FMP_API_KEY}"
+
+    try:
+        # Fetch Finnhub data
+        earnings = requests.get(earnings_url).json()
+        ipos = requests.get(ipo_url).json().get("ipoCalendar", [])
+
+        # Fetch FMP data
+        dividends = requests.get(dividends_url).json()
+        splits = requests.get(splits_url).json()
+
+        return jsonify({
+            "symbol": symbol,
+            "earnings_finnhub": earnings,
+            "ipos_finnhub": ipos,
+            "dividends_fmp": dividends,
+            "splits_fmp": splits
+        })
+
+    except Exception as e:
+        return jsonify({"error": "Failed to fetch stock events", "details": str(e)}), 500
 
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
