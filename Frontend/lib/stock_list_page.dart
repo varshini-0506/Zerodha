@@ -6,6 +6,7 @@ import 'services/stock_service.dart';
 import 'news_page.dart';
 import 'auth_service.dart';
 import 'dart:async';
+import 'events_page.dart';
 
 class StockListPage extends StatefulWidget {
   @override
@@ -265,6 +266,22 @@ class _StockListPageState extends State<StockListPage> {
                   MaterialPageRoute(
                     builder: (_) => NewsPage(),
                     settings: RouteSettings(name: '/news'),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.event, color: Colors.deepPurple),
+              title: Text('Events', style: TextStyle(fontWeight: FontWeight.w500)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              tileColor: ModalRoute.of(context)?.settings.name == '/events' ? Colors.teal[50] : null,
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EventsPage(),
+                    settings: RouteSettings(name: '/events'),
                   ),
                 );
               },

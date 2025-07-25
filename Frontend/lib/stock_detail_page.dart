@@ -3,6 +3,8 @@ import 'models/stock_model.dart';
 import 'services/stock_service.dart';
 import 'widgets/live_price_chart.dart';
 import 'dart:ui';
+import 'dart:async'; // Added for StreamSubscription
+import 'services/websocket_service.dart';
 
 class StockDetailPage extends StatefulWidget {
   final Stock stock;
@@ -17,12 +19,38 @@ class _StockDetailPageState extends State<StockDetailPage> {
   late Stock _stock;
   bool _isLoading = false;
   final StockService _stockService = StockService();
+  StreamSubscription? _tickSubscription; // Added for WebSocket subscription
 
   @override
   void initState() {
     super.initState();
     _stock = widget.stock;
     _fetchLatestQuote();
+    // Connect to WebSocket and listen for live ticks
+    WebSocketService.instance.connect();
+    _tickSubscription = WebSocketService.instance.priceStream.listen((tickData) {
+      final symbol = tickData['symbol'] ?? tickData['tradingsymbol'] ?? '';
+      final instrumentToken = tickData['instrument_token']?.toString() ?? '';
+      if (symbol == _stock.symbol || instrumentToken == _stock.instrumentToken.toString()) {
+        setState(() {
+          _stock = _stock.copyWith(
+            lastPrice: (tickData['last_price'] ?? tickData['ltp'] ?? 0.0).toDouble(),
+            quote: {
+              ...?_stock.quote,
+              'change': tickData['change'],
+              'change_percent': tickData['change_percent'],
+              'last_trade_time': tickData['timestamp'],
+            },
+          );
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tickSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchLatestQuote() async {

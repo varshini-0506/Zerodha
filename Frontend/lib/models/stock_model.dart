@@ -132,4 +132,37 @@ class Stock {
 
   // Helper method to get performance percentage
   double get perfPercent => changePercent ?? 0.0;
+
+  Stock copyWith({
+    double? lastPrice,
+    Map<String, dynamic>? quote,
+    int? lastQuantity,
+    String? lastTradeTime,
+    double? netChange,
+    Map<String, dynamic>? ohlc,
+    int? volume,
+  }) {
+    return Stock(
+      symbol: symbol,
+      name: name,
+      instrumentToken: instrumentToken,
+      exchange: exchange,
+      instrumentType: instrumentType,
+      segment: segment,
+      expiry: expiry,
+      strike: strike,
+      tickSize: tickSize,
+      lotSize: lotSize,
+      quote: quote ?? this.quote,
+      historicalData: historicalData,
+      lastUpdated: lastUpdated,
+      lastPrice: lastPrice ?? this.lastPrice,
+      lastQuantity: lastQuantity ?? this.lastQuantity,
+      lastTradeTime: lastTradeTime ?? this.lastTradeTime,
+      lowerCircuitLimit: lowerCircuitLimit,
+      netChange: netChange ?? this.netChange,
+      ohlc: ohlc ?? this.ohlc,
+      volume: volume ?? this.volume,
+    );
+  }
 } 
