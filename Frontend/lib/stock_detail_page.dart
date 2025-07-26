@@ -3,7 +3,7 @@ import 'models/stock_model.dart';
 import 'services/stock_service.dart';
 import 'widgets/live_price_chart.dart';
 import 'dart:ui';
-import 'dart:async'; // Added for StreamSubscription
+import 'dart:async'; // Added for StreamSubscription and Timer
 import 'services/websocket_service.dart';
 
 class StockDetailPage extends StatefulWidget {
@@ -20,6 +20,7 @@ class _StockDetailPageState extends State<StockDetailPage> {
   bool _isLoading = false;
   final StockService _stockService = StockService();
   StreamSubscription? _tickSubscription; // Added for WebSocket subscription
+  bool _isWebSocketConnected = false; // Track WebSocket connection status
 
   @override
   void initState() {
@@ -28,13 +29,33 @@ class _StockDetailPageState extends State<StockDetailPage> {
     _fetchLatestQuote();
     // Connect to WebSocket and listen for live ticks
     WebSocketService.instance.connect();
+    
+    // Check WebSocket connection status
+    _isWebSocketConnected = WebSocketService.instance.isConnected;
+    
+    // Periodically check WebSocket connection status
+    Timer.periodic(Duration(seconds: 2), (timer) {
+      if (mounted) {
+        setState(() {
+          _isWebSocketConnected = WebSocketService.instance.isConnected;
+        });
+      }
+    });
+    
     _tickSubscription = WebSocketService.instance.priceStream.listen((tickData) {
       final symbol = tickData['symbol'] ?? tickData['tradingsymbol'] ?? '';
       final instrumentToken = tickData['instrument_token']?.toString() ?? '';
+      final newPrice = (tickData['last_price'] ?? tickData['ltp'] ?? 0.0).toDouble();
+      
+      print('🔄 Tick received for $symbol (current: ${_stock.symbol})');
+      print('   Instrument token: $instrumentToken (current: ${_stock.instrumentToken})');
+      print('   New price: $newPrice (current: ${_stock.lastPrice})');
+      
       if (symbol == _stock.symbol || instrumentToken == _stock.instrumentToken.toString()) {
+        print('✅ Match found! Updating stock details...');
         setState(() {
           _stock = _stock.copyWith(
-            lastPrice: (tickData['last_price'] ?? tickData['ltp'] ?? 0.0).toDouble(),
+            lastPrice: newPrice,
             quote: {
               ...?_stock.quote,
               'change': tickData['change'],
@@ -43,6 +64,9 @@ class _StockDetailPageState extends State<StockDetailPage> {
             },
           );
         });
+        print('✅ Stock updated - New price: ${_stock.lastPrice}');
+      } else {
+        print('❌ No match - skipping update');
       }
     });
   }
@@ -82,6 +106,15 @@ class _StockDetailPageState extends State<StockDetailPage> {
         backgroundColor: Colors.teal[600],
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: () {
+              print('🔄 Manual refresh triggered');
+              _fetchLatestQuote();
+            },
+          ),
+        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -159,14 +192,20 @@ class _StockDetailPageState extends State<StockDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    TweenAnimationBuilder<double>(
-                      tween: Tween<double>(begin: 0, end: (_stock.lastPrice ?? 0.0)),
-                      duration: Duration(milliseconds: 900),
-                      builder: (context, value, child) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '₹${value.toStringAsFixed(2)}',
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: Duration(milliseconds: 300),
+                          transitionBuilder: (Widget child, Animation<double> animation) {
+                            return ScaleTransition(
+                              scale: animation,
+                              child: child,
+                            );
+                          },
+                          child: Text(
+                            '₹${(_stock.lastPrice ?? 0.0).toStringAsFixed(2)}',
+                            key: ValueKey(_stock.lastPrice),
                             style: const TextStyle(
                               fontSize: 38,
                               fontWeight: FontWeight.bold,
@@ -174,18 +213,18 @@ class _StockDetailPageState extends State<StockDetailPage> {
                               letterSpacing: 1.2,
                             ),
                           ),
-                          SizedBox(height: 4),
-                          if (_stock.quote?['last_trade_time'] != null)
-                            Text(
-                              'Last traded: ${_stock.quote!['last_trade_time']}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.white.withOpacity(0.85),
-                                fontWeight: FontWeight.w400,
-                              ),
+                        ),
+                        SizedBox(height: 4),
+                        if (_stock.quote?['last_trade_time'] != null)
+                          Text(
+                            'Last traded: ${_stock.quote!['last_trade_time']}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.85),
+                              fontWeight: FontWeight.w400,
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -412,4 +451,6 @@ class _StockDetailPageState extends State<StockDetailPage> {
       ),
     );
   }
+
+
 } 
