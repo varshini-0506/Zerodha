@@ -1,5 +1,5 @@
 plugins {
-    kotlin("jvm") version "1.9.10" apply false // add this line if not already present
+    // Removed kotlin plugin to avoid version conflicts
 }
 
 allprojects {
