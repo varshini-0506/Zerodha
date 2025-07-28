@@ -644,19 +644,32 @@ def recover_zerodha_token_route():
     chrome_options.add_experimental_option("useAutomationExtension", False)
     chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium")
 
-    # Try to use webdriver_manager first, fallback to system chromedriver
+    # Check if Chrome and ChromeDriver exist
+    chrome_bin = os.getenv("CHROME_BIN", "/usr/bin/chromium")
+    chromedriver_bin = os.getenv("CHROMEDRIVER_BIN", "/usr/bin/chromedriver")
+    
+    print(f"Checking Chrome binary: {chrome_bin}")
+    print(f"Checking ChromeDriver binary: {chromedriver_bin}")
+    
+    # Check if files exist
+    import subprocess
     try:
-        from webdriver_manager.chrome import ChromeDriverManager
-        driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()),
-            options=chrome_options
-        )
+        result = subprocess.run(['ls', '-la', chrome_bin], capture_output=True, text=True)
+        print(f"Chrome binary check: {result.stdout}")
     except Exception as e:
-        print(f"WebDriver Manager failed: {e}, using system chromedriver")
-        driver = webdriver.Chrome(
-            service=Service(os.getenv("CHROMEDRIVER_BIN", "/usr/bin/chromedriver")),
-            options=chrome_options
-        )
+        print(f"Error checking Chrome binary: {e}")
+    
+    try:
+        result = subprocess.run(['ls', '-la', chromedriver_bin], capture_output=True, text=True)
+        print(f"ChromeDriver binary check: {result.stdout}")
+    except Exception as e:
+        print(f"Error checking ChromeDriver binary: {e}")
+    
+    # Use system ChromeDriver directly
+    driver = webdriver.Chrome(
+        service=Service(chromedriver_bin),
+        options=chrome_options
+    )
     wait = WebDriverWait(driver, 30)
 
     result = {

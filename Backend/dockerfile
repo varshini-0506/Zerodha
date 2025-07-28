@@ -22,10 +22,18 @@ RUN apt-get update && \
     chromium \
     chromium-browser \
     xvfb && \
-    ln -sf /usr/bin/chromium /usr/bin/chrome || true && \
-    ln -sf /usr/bin/chromium-browser /usr/bin/chromium || true && \
-    ls -l /usr/bin/chromium* && \
-    ls -l /usr/bin/chromedriver && \
+    echo "=== Checking installed packages ===" && \
+    dpkg -l | grep chromium && \
+    echo "=== Checking binary locations ===" && \
+    which chromium || echo "chromium not found" && \
+    which chromium-browser || echo "chromium-browser not found" && \
+    which chromedriver || echo "chromedriver not found" && \
+    echo "=== Creating symlinks ===" && \
+    ln -sf /usr/bin/chromium /usr/bin/chrome || echo "Failed to create chrome symlink" && \
+    ln -sf /usr/bin/chromium-browser /usr/bin/chromium || echo "Failed to create chromium symlink" && \
+    echo "=== Final binary check ===" && \
+    ls -la /usr/bin/chromium* || echo "No chromium binaries found" && \
+    ls -la /usr/bin/chromedriver || echo "chromedriver not found" && \
     rm -rf /var/lib/apt/lists/*
 
 # Set environment variables for Chrome
@@ -51,4 +59,4 @@ RUN chmod +x start.sh
 EXPOSE 5000
 
 # Start the Flask app
-CMD ["python", "app.py"]
+CMD ["./start.sh"]
