@@ -7,7 +7,7 @@ import json
 import threading
 import os
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, date
 import pytz
 import traceback
 
@@ -558,19 +558,28 @@ def recover_zerodha_token_route():
     # Supabase setup
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    opts = Options()
-    opts.add_argument("--start-maximized")
-    opts.add_argument("--disable-blink-features=AutomationControlled")
-    opts.add_experimental_option("excludeSwitches", ["enable-automation"])
-    opts.add_experimental_option("useAutomationExtension", False)
-    opts.add_argument("--headless")
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
-    opts.binary_location = "/usr/bin/chromium-browser"
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium")
 
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+    driver = webdriver.Chrome(
+        service=Service(os.getenv("CHROMEDRIVER_BIN", "/usr/bin/chromedriver")),
+        options=chrome_options
+    )
     wait = WebDriverWait(driver, 30)
-    result = {"success": False, "access_token": None, "error": None, "request_token": None, "supabase_response": None}
+
+    result = {
+        "success": False,
+        "access_token": None,
+        "error": None,
+        "request_token": None,
+        "supabase_response": None
+    }
+
     try:
         # Step 1: Navigate to Zerodha login
         login_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={API_KEY}"
@@ -625,6 +634,7 @@ def recover_zerodha_token_route():
         time.sleep(2)
         driver.quit()
     return jsonify(result)
+
 
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
