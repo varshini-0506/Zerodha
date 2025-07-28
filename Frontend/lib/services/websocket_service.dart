@@ -44,12 +44,16 @@ class WebSocketService {
 
       _socket!.on('tick_data', (data) {
         print('📊 Received tick_data: ${data['data']?.length ?? 0} records');
+        print('📊 Raw data structure: ${data.keys.toList()}');
         final tickData = data['data'] as List?;
         if (tickData != null) {
           for (final tick in tickData) {
             print('📈 Processing tick: ${tick['symbol']} - ${tick['last_price']}');
+            print('📈 Tick keys: ${tick.keys.toList()}');
             _priceController?.add(Map<String, dynamic>.from(tick));
           }
+        } else {
+          print('⚠️ No tick data found in the received data');
         }
       });
 

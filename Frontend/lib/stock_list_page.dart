@@ -6,6 +6,7 @@ import 'services/stock_service.dart';
 import 'news_page.dart';
 import 'auth_service.dart';
 import 'dart:async';
+import 'events_page.dart';
 
 class StockListPage extends StatefulWidget {
   @override
@@ -32,8 +33,24 @@ class _StockListPageState extends State<StockListPage> {
   @override
   void initState() {
     super.initState();
-    _loadStocks();
-    _loadWishlist();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    // Test API connection first
+    final isApiConnected = await StockService.testApiConnection();
+    if (!isApiConnected) {
+      setState(() {
+        isLoading = false;
+        hasError = true;
+        errorMessage = 'Unable to connect to server. Please check your internet connection and try again.';
+      });
+      return;
+    }
+    
+    // Load data if API is connected
+    await _loadStocks();
+    await _loadWishlist();
   }
 
   Future<void> _loadStocks() async {
@@ -43,19 +60,27 @@ class _StockListPageState extends State<StockListPage> {
     });
 
     try {
+      print('Starting to load stocks...'); // Debug log
+      
       // Load popular stocks first
+      print('Loading popular stocks...'); // Debug log
       final popularStocksData = await StockService.getPopularStocks();
       final popularStocks = popularStocksData.map((json) => Stock.fromJson(json)).toList();
+      print('Loaded ${popularStocks.length} popular stocks'); // Debug log
       
       // Load all stocks with pagination
+      print('Loading all stocks...'); // Debug log
       final stocksData = await StockService.getStocks(page: 1, limit: 100);
       final stocks = (stocksData['stocks'] as List)
           .map((json) => Stock.fromJson(json))
           .toList();
+      print('Loaded ${stocks.length} stocks'); // Debug log
 
       // Combine and fetch quote data for each stock
       final allStocksCombined = [...popularStocks, ...stocks];
+      print('Fetching quotes for ${allStocksCombined.length} stocks...'); // Debug log
       final stocksWithQuotes = await _fetchQuotesForStocks(allStocksCombined);
+      print('Successfully loaded ${stocksWithQuotes.length} stocks with quotes'); // Debug log
 
       setState(() {
         allStocks = stocksWithQuotes;
@@ -65,6 +90,7 @@ class _StockListPageState extends State<StockListPage> {
 
       _applyFilters();
     } catch (e) {
+      print('Error in _loadStocks: $e'); // Debug log
       setState(() {
         isLoading = false;
         hasError = true;
@@ -89,28 +115,39 @@ class _StockListPageState extends State<StockListPage> {
   Future<List<Stock>> _fetchQuotesForStocks(List<Stock> stocks) async {
     final stocksWithQuotes = <Stock>[];
     
-    // Fetch quotes for each stock (limit to first 20 for performance)
-    final stocksToFetch = stocks.take(20).toList();
+    // Limit to first 30 stocks for performance
+    final stocksToFetch = stocks.take(30).toList();
+    final symbols = stocksToFetch.map((stock) => stock.symbol).toList();
     
-    for (final stock in stocksToFetch) {
-      try {
-        final stockDetail = await StockService.getStockDetail(stock.symbol);
-        // Use the 'quote' field from the stock detail response
-        final stockWithQuote = Stock.fromJson(stockDetail);
-        
-        stocksWithQuotes.add(stockWithQuote);
-        
-        // Add a small delay to avoid overwhelming the API
-        await Future.delayed(Duration(milliseconds: 100));
-      } catch (e) {
-        print('Error fetching quote for ${stock.symbol}: $e');
-        // Add stock without quote data
-        stocksWithQuotes.add(stock);
+    try {
+      // Use batch quotes API for better performance
+      final batchQuotesResponse = await StockService.getBatchQuotes(symbols);
+      final quotes = batchQuotesResponse['quotes'] as Map<String, dynamic>;
+      
+      // Update stocks with quote data
+      for (final stock in stocksToFetch) {
+        final quoteData = quotes[stock.symbol.toUpperCase()];
+        if (quoteData != null) {
+          // Create a new stock object with quote data
+          final stockWithQuote = stock.copyWith(
+            quote: quoteData,
+            lastPrice: quoteData['last_price']?.toDouble(),
+            volume: quoteData['volume']?.toDouble(),
+            netChange: quoteData['change']?.toDouble(),
+          );
+          stocksWithQuotes.add(stockWithQuote);
+        } else {
+          stocksWithQuotes.add(stock);
+        }
       }
+    } catch (e) {
+      print('Error fetching batch quotes: $e');
+      // If batch quotes fail, add stocks without quotes
+      stocksWithQuotes.addAll(stocksToFetch);
     }
     
     // Add remaining stocks without quotes
-    stocksWithQuotes.addAll(stocks.skip(20));
+    stocksWithQuotes.addAll(stocks.skip(30));
     
     return stocksWithQuotes;
   }
@@ -144,7 +181,7 @@ class _StockListPageState extends State<StockListPage> {
       final searchResults = await StockService.searchStocks(query);
       final searchStocks = searchResults.map((json) => Stock.fromJson(json)).toList();
       
-      // Fetch quotes for search results
+      // Fetch quotes for search results using batch API
       final stocksWithQuotes = await _fetchQuotesForStocks(searchStocks);
       
       setState(() {
@@ -269,6 +306,22 @@ class _StockListPageState extends State<StockListPage> {
                 );
               },
             ),
+            ListTile(
+              leading: Icon(Icons.event, color: Colors.deepPurple),
+              title: Text('Events', style: TextStyle(fontWeight: FontWeight.w500)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              tileColor: ModalRoute.of(context)?.settings.name == '/events' ? Colors.teal[50] : null,
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EventsPage(),
+                    settings: RouteSettings(name: '/events'),
+                  ),
+                );
+              },
+            ),
             Spacer(),
             Divider(),
             Padding(
@@ -382,10 +435,43 @@ class _StockListPageState extends State<StockListPage> {
             SizedBox(height: 8),
             Text(errorMessage, style: TextStyle(color: Colors.grey[600]), textAlign: TextAlign.center),
             SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadStocks,
-              child: Text('Retry'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      isLoading = true;
+                      hasError = false;
+                    });
+                    _initializeApp();
+                  },
+                  child: Text('Retry'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                ),
+                SizedBox(width: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      isLoading = true;
+                      hasError = false;
+                    });
+                    StockService.testApiConnection().then((connected) {
+                      if (connected) {
+                        _initializeApp();
+                      } else {
+                        setState(() {
+                          isLoading = false;
+                          hasError = true;
+                          errorMessage = 'Server is not reachable. Please check your internet connection.';
+                        });
+                      }
+                    });
+                  },
+                  child: Text('Test Connection'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                ),
+              ],
             ),
           ],
         ),

@@ -1,9 +1,17 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 
 class StockService {
   // Deployed backend URL
   static const String baseUrl = 'https://zerodha-ay41.onrender.com/api';
+  
+  // HTTP client with timeout configuration
+  static final http.Client _client = http.Client();
+  
+  // Timeout duration for API calls
+  static const Duration _timeout = Duration(seconds: 30);
   
   // Get all stocks with pagination and search
   static Future<Map<String, dynamic>> getStocks({
@@ -23,13 +31,23 @@ class StockService {
       
       final uri = Uri.parse('$baseUrl/stocks').replace(queryParameters: queryParams);
       print('Making request to: $uri'); // Debug log
-      final response = await http.get(uri);
+      
+      final response = await _client.get(uri).timeout(_timeout);
+      
+      print('Response status: ${response.statusCode}'); // Debug log
+      print('Response body length: ${response.body.length}'); // Debug log
       
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        throw Exception('Failed to load stocks: ${response.statusCode}');
+        throw Exception('Failed to load stocks: ${response.statusCode} - ${response.body}');
       }
+    } on SocketException catch (e) {
+      print('Network error in getStocks: $e'); // Debug log
+      throw Exception('Network error: Please check your internet connection');
+    } on TimeoutException catch (e) {
+      print('Timeout error in getStocks: $e'); // Debug log
+      throw Exception('Request timeout: Please try again');
     } catch (e) {
       print('Error in getStocks: $e'); // Debug log
       throw Exception('Error fetching stocks: $e');
@@ -41,14 +59,23 @@ class StockService {
     try {
       final uri = Uri.parse('$baseUrl/stocks/popular');
       print('Making request to: $uri'); // Debug log
-      final response = await http.get(uri);
+      
+      final response = await _client.get(uri).timeout(_timeout);
+      
+      print('Popular stocks response status: ${response.statusCode}'); // Debug log
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         return List<Map<String, dynamic>>.from(data['stocks']);
       } else {
-        throw Exception('Failed to load popular stocks: ${response.statusCode}');
+        throw Exception('Failed to load popular stocks: ${response.statusCode} - ${response.body}');
       }
+    } on SocketException catch (e) {
+      print('Network error in getPopularStocks: $e'); // Debug log
+      throw Exception('Network error: Please check your internet connection');
+    } on TimeoutException catch (e) {
+      print('Timeout error in getPopularStocks: $e'); // Debug log
+      throw Exception('Request timeout: Please try again');
     } catch (e) {
       print('Error in getPopularStocks: $e'); // Debug log
       throw Exception('Error fetching popular stocks: $e');
@@ -69,6 +96,38 @@ class StockService {
       }
     } catch (e) {
       throw Exception('Error fetching stock details: $e');
+    }
+  }
+
+  // Get batch quotes for multiple stocks (PERFORMANCE OPTIMIZATION)
+  static Future<Map<String, dynamic>> getBatchQuotes(List<String> symbols) async {
+    try {
+      final uri = Uri.parse('$baseUrl/stocks/batch_quotes');
+      print('Making batch quotes request to: $uri'); // Debug log
+      print('Symbols: $symbols'); // Debug log
+      
+      final response = await _client.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'symbols': symbols}),
+      ).timeout(_timeout);
+      
+      print('Batch quotes response status: ${response.statusCode}'); // Debug log
+      
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load batch quotes: ${response.statusCode} - ${response.body}');
+      }
+    } on SocketException catch (e) {
+      print('Network error in getBatchQuotes: $e'); // Debug log
+      throw Exception('Network error: Please check your internet connection');
+    } on TimeoutException catch (e) {
+      print('Timeout error in getBatchQuotes: $e'); // Debug log
+      throw Exception('Request timeout: Please try again');
+    } catch (e) {
+      print('Error in getBatchQuotes: $e'); // Debug log
+      throw Exception('Error fetching batch quotes: $e');
     }
   }
   
@@ -127,6 +186,23 @@ class StockService {
       return List<String>.from(data['wishlist'] ?? []);
     } else {
       throw Exception('Failed to fetch wishlist: ${response.body}');
+    }
+  }
+
+  // Test API connectivity
+  static Future<bool> testApiConnection() async {
+    try {
+      final uri = Uri.parse('$baseUrl/market_status');
+      print('Testing API connection to: $uri'); // Debug log
+      
+      final response = await _client.get(uri).timeout(Duration(seconds: 10));
+      
+      print('API test response status: ${response.statusCode}'); // Debug log
+      
+      return response.statusCode == 200;
+    } catch (e) {
+      print('API connection test failed: $e'); // Debug log
+      return false;
     }
   }
 

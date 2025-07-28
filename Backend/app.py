@@ -7,7 +7,7 @@ import json
 import threading
 import os
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta, time, date
+from datetime import datetime, timedelta, time , date
 import pytz
 import traceback
 
@@ -34,6 +34,8 @@ API_KEY = os.getenv('KITE_API_KEY')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
+FMP_API_KEY = os.getenv("FMP_API_KEY")
 
 def fetch_access_token_from_supabase():
     """
@@ -251,6 +253,82 @@ def get_stock_detail(symbol):
         
         return jsonify(stock_detail)
     
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/stocks/batch_quotes', methods=['POST'])
+def get_batch_quotes():
+    """Get quote data for multiple stocks in a single request"""
+    try:
+        data = request.get_json()
+        symbols = data.get('symbols', [])
+        
+        if not symbols:
+            return jsonify({"error": "Symbols list is required"}), 400
+        
+        # Limit to 50 symbols to prevent abuse
+        if len(symbols) > 50:
+            symbols = symbols[:50]
+        
+        quotes = {}
+        instruments = get_all_instruments()
+        
+        # Prepare instrument tokens for batch quote
+        instrument_tokens = []
+        symbol_to_token = {}
+        
+        for symbol in symbols:
+            symbol_upper = symbol.upper()
+            for inst in instruments:
+                if inst['tradingsymbol'] == symbol_upper:
+                    instrument_tokens.append(inst['instrument_token'])
+                    symbol_to_token[symbol_upper] = inst['instrument_token']
+                    break
+        
+        if not instrument_tokens:
+            return jsonify({"quotes": {}})
+        
+        try:
+            # Get batch quotes from Zerodha
+            batch_quotes = kite.quote([f"NSE:{symbol}" for symbol in symbols])
+            
+            # Process each quote
+            for symbol in symbols:
+                symbol_upper = symbol.upper()
+                quote_key = f"NSE:{symbol_upper}"
+                
+                if quote_key in batch_quotes:
+                    quote_data = batch_quotes[quote_key]
+                    
+                    # Calculate change and change_percent
+                    last_price = quote_data.get('last_price')
+                    ohlc = quote_data.get('ohlc', {})
+                    close = ohlc.get('close') if ohlc else quote_data.get('close')
+                    
+                    if close is None:
+                        close = quote_data.get('close')
+                    
+                    if last_price is not None and close not in (None, 0):
+                        change = last_price - close
+                        change_percent = ((last_price - close) / close) * 100 if close != 0 else 0
+                        quote_data['change'] = change
+                        quote_data['change_percent'] = change_percent
+                    
+                    quotes[symbol_upper] = quote_data
+                else:
+                    quotes[symbol_upper] = None
+                    
+        except Exception as e:
+            print(f"Error fetching batch quotes: {e}")
+            # Return empty quotes if batch fails
+            for symbol in symbols:
+                quotes[symbol.upper()] = None
+        
+        return jsonify({
+            "quotes": quotes,
+            "timestamp": datetime.now().isoformat()
+        })
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -529,10 +607,8 @@ def remove_from_wishlist():
 @app.route('/api/recover_zerodha_token', methods=['POST'])
 def recover_zerodha_token_route():
     """Recover Zerodha access token and store in Supabase"""
-    import os
     import time
     import pyotp
-    from dotenv import load_dotenv
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.common.by import By
@@ -543,7 +619,6 @@ def recover_zerodha_token_route():
     from supabase import create_client, Client
     from webdriver_manager.chrome import ChromeDriverManager
     from selenium.common.exceptions import StaleElementReferenceException
-    from datetime import datetime
 
     # Load environment variables
     load_dotenv()
@@ -564,12 +639,24 @@ def recover_zerodha_token_route():
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
     chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium")
 
-    driver = webdriver.Chrome(
-        service=Service(os.getenv("CHROMEDRIVER_BIN", "/usr/bin/chromedriver")),
-        options=chrome_options
-    )
+    # Try to use webdriver_manager first, fallback to system chromedriver
+    try:
+        from webdriver_manager.chrome import ChromeDriverManager
+        driver = webdriver.Chrome(
+            service=Service(ChromeDriverManager().install()),
+            options=chrome_options
+        )
+    except Exception as e:
+        print(f"WebDriver Manager failed: {e}, using system chromedriver")
+        driver = webdriver.Chrome(
+            service=Service(os.getenv("CHROMEDRIVER_BIN", "/usr/bin/chromedriver")),
+            options=chrome_options
+        )
     wait = WebDriverWait(driver, 30)
 
     result = {
@@ -581,40 +668,45 @@ def recover_zerodha_token_route():
     }
 
     try:
+        print("Starting Zerodha token recovery process...")
+        print(f"Using Chrome binary: {os.getenv('CHROME_BIN', '/usr/bin/chromium')}")
+        print(f"Using ChromeDriver: {os.getenv('CHROMEDRIVER_BIN', '/usr/bin/chromedriver')}")
+        
         # Step 1: Navigate to Zerodha login
         login_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={API_KEY}"
+        print(f"Navigating to: {login_url}")
         driver.get(login_url)
 
         # Step 2: Enter username and password
-        wait.until(EC.presence_of_element_located((By.ID, "userid"))).send_keys(USER_ID)
+        print("Filling username...")
+        username_field = wait.until(EC.presence_of_element_located((By.ID, "userid")))
+        username_field.send_keys(USER_ID)
+        print("Filling password...")
         driver.find_element(By.ID, "password").send_keys(PASSWORD)
+        print("Submitting login form...")
         driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
 
-        # Step 3: Generate TOTP and submit
+        print("Waiting for TOTP field to be clickable (after page navigation)...")
+        totp_field = wait.until(EC.element_to_be_clickable((By.ID, "userid")))
+        print("TOTP field found, entering TOTP...")
         totp = pyotp.TOTP(TOTP_SECRET).now()
-        for attempt in range(2):  # Try twice
-            try:
-                ext_totp_field = wait.until(EC.element_to_be_clickable((By.ID, "userid")))
-                ext_totp_field.click()
-                time.sleep(0.2)
-                ext_totp_field.clear()
-                ext_totp_field.send_keys(totp)
-                break  # Success, exit loop
-            except StaleElementReferenceException:
-                if attempt == 1:
-                    raise
-            except Exception as e:
-                result["error"] = f"Could not interact with External TOTP field: {e}"
-                raise
-
+        totp_field.clear()
+        totp_field.send_keys(totp)
+        print("TOTP entered, submitting form...")
         driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
 
-        # Step 4: Wait for redirect and get request_token
+        # Wait for the URL to contain 'request_token=' after TOTP submit
+        print("Waiting for request_token in URL...")
         wait.until(lambda d: "request_token=" in d.current_url)
         request_token = driver.current_url.split("request_token=")[-1].split("&")[0]
+        print("Request token found:", request_token)
         result["request_token"] = request_token
 
-        # Step 5: Exchange request_token for access_token using-KiteConnect
+        # Close the browser immediately after extracting the request token
+        driver.quit()
+        driver = None
+
+        # Step 5: Exchange request_token for access_token using KiteConnect
         kite = KiteConnect(api_key=API_KEY)
         data = kite.generate_session(request_token, api_secret=API_SECRET)
         access_token = data["access_token"]
@@ -629,12 +721,53 @@ def recover_zerodha_token_route():
         result["supabase_response"] = response.data
         result["success"] = True
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         result["error"] = str(e)
     finally:
-        time.sleep(2)
-        driver.quit()
+        # Only call driver.quit() if the driver is still open
+        try:
+            if driver is not None:
+                driver.quit()
+        except:
+            pass
     return jsonify(result)
 
+@app.route('/api/stock_events/<symbol>', methods=['GET'])
+def get_combined_stock_events(symbol):
+    today = datetime.today()
+    one_year_ago = today - timedelta(days=365)
+    today_str = today.strftime('%Y-%m-%d')
+    one_year_ago_str = one_year_ago.strftime('%Y-%m-%d')
+
+    # Finnhub URLs
+    earnings_url = f'https://finnhub.io/api/v1/stock/earnings?symbol={symbol}&token={FINNHUB_API_KEY}'
+    ipo_url = f'https://finnhub.io/api/v1/calendar/ipo?from={today_str}&to={(today + timedelta(days=30)).strftime("%Y-%m-%d")}&token={FINNHUB_API_KEY}'
+
+    # FMP URLs
+    base_fmp_url = "https://financialmodelingprep.com/api/v3"
+    dividends_url = f"{base_fmp_url}/historical-price-full/stock_dividend/{symbol}?apikey={FMP_API_KEY}"
+    splits_url = f"{base_fmp_url}/historical-price-full/stock_split/{symbol}?apikey={FMP_API_KEY}"
+
+    try:
+        # Fetch Finnhub data
+        earnings = requests.get(earnings_url).json()
+        ipos = requests.get(ipo_url).json().get("ipoCalendar", [])
+
+        # Fetch FMP data
+        dividends = requests.get(dividends_url).json()
+        splits = requests.get(splits_url).json()
+
+        return jsonify({
+            "symbol": symbol,
+            "earnings_finnhub": earnings,
+            "ipos_finnhub": ipos,
+            "dividends_fmp": dividends,
+            "splits_fmp": splits
+        })
+
+    except Exception as e:
+        return jsonify({"error": "Failed to fetch stock events", "details": str(e)}), 500
 
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
@@ -730,10 +863,7 @@ def handle_connect():
 
 if __name__ == "__main__":
     print("Starting Zerodha WebSocket streamer...")
-    # Start WebSocket connection to Kite
-    threading.Thread(target=start_kite_ws, daemon=True).start()
-    # Start background tick sender for SocketIO
-    threading.Thread(target=background_tick_sender, daemon=True).start()
-    # Start Flask-SocketIO server
+    # Start background tasks using SocketIO's method
+    socketio.start_background_task(start_kite_ws)
+    socketio.start_background_task(background_tick_sender)
     socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
