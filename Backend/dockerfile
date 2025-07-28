@@ -20,7 +20,12 @@ RUN apt-get update && \
     libgtk-3-0 \
     chromium-driver \
     chromium \
+    chromium-browser \
     xvfb && \
+    ln -sf /usr/bin/chromium /usr/bin/chrome || true && \
+    ln -sf /usr/bin/chromium-browser /usr/bin/chromium || true && \
+    ls -l /usr/bin/chromium* && \
+    ls -l /usr/bin/chromedriver && \
     rm -rf /var/lib/apt/lists/*
 
 # Set environment variables for Chrome
