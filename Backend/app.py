@@ -256,6 +256,82 @@ def get_stock_detail(symbol):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/stocks/batch_quotes', methods=['POST'])
+def get_batch_quotes():
+    """Get quote data for multiple stocks in a single request"""
+    try:
+        data = request.get_json()
+        symbols = data.get('symbols', [])
+        
+        if not symbols:
+            return jsonify({"error": "Symbols list is required"}), 400
+        
+        # Limit to 50 symbols to prevent abuse
+        if len(symbols) > 50:
+            symbols = symbols[:50]
+        
+        quotes = {}
+        instruments = get_all_instruments()
+        
+        # Prepare instrument tokens for batch quote
+        instrument_tokens = []
+        symbol_to_token = {}
+        
+        for symbol in symbols:
+            symbol_upper = symbol.upper()
+            for inst in instruments:
+                if inst['tradingsymbol'] == symbol_upper:
+                    instrument_tokens.append(inst['instrument_token'])
+                    symbol_to_token[symbol_upper] = inst['instrument_token']
+                    break
+        
+        if not instrument_tokens:
+            return jsonify({"quotes": {}})
+        
+        try:
+            # Get batch quotes from Zerodha
+            batch_quotes = kite.quote([f"NSE:{symbol}" for symbol in symbols])
+            
+            # Process each quote
+            for symbol in symbols:
+                symbol_upper = symbol.upper()
+                quote_key = f"NSE:{symbol_upper}"
+                
+                if quote_key in batch_quotes:
+                    quote_data = batch_quotes[quote_key]
+                    
+                    # Calculate change and change_percent
+                    last_price = quote_data.get('last_price')
+                    ohlc = quote_data.get('ohlc', {})
+                    close = ohlc.get('close') if ohlc else quote_data.get('close')
+                    
+                    if close is None:
+                        close = quote_data.get('close')
+                    
+                    if last_price is not None and close not in (None, 0):
+                        change = last_price - close
+                        change_percent = ((last_price - close) / close) * 100 if close != 0 else 0
+                        quote_data['change'] = change
+                        quote_data['change_percent'] = change_percent
+                    
+                    quotes[symbol_upper] = quote_data
+                else:
+                    quotes[symbol_upper] = None
+                    
+        except Exception as e:
+            print(f"Error fetching batch quotes: {e}")
+            # Return empty quotes if batch fails
+            for symbol in symbols:
+                quotes[symbol.upper()] = None
+        
+        return jsonify({
+            "quotes": quotes,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/market_status', methods=['GET'])
 def get_market_status():
     """Get current market status"""
