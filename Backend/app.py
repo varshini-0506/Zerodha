@@ -640,13 +640,18 @@ def recover_zerodha_token_route():
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-plugins")
+    chrome_options.add_argument("--disable-images")
+    chrome_options.add_argument("--disable-web-security")
+    chrome_options.add_argument("--allow-running-insecure-content")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option("useAutomationExtension", False)
-    chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium")
+    chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
 
     # Check if Chrome and ChromeDriver exist
-    chrome_bin = os.getenv("CHROME_BIN", "/usr/bin/chromium")
-    chromedriver_bin = os.getenv("CHROMEDRIVER_BIN", "/usr/bin/chromedriver")
+    chrome_bin = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
+    chromedriver_bin = os.getenv("CHROMEDRIVER_BIN", "/usr/local/bin/chromedriver")
     
     print(f"Checking Chrome binary: {chrome_bin}")
     print(f"Checking ChromeDriver binary: {chromedriver_bin}")
@@ -682,8 +687,8 @@ def recover_zerodha_token_route():
 
     try:
         print("Starting Zerodha token recovery process...")
-        print(f"Using Chrome binary: {os.getenv('CHROME_BIN', '/usr/bin/chromium')}")
-        print(f"Using ChromeDriver: {os.getenv('CHROMEDRIVER_BIN', '/usr/bin/chromedriver')}")
+        print(f"Using Chrome binary: {os.getenv('CHROME_BIN', '/usr/bin/google-chrome')}")
+        print(f"Using ChromeDriver: {os.getenv('CHROMEDRIVER_BIN', '/usr/local/bin/chromedriver')}")
         
         # Step 1: Navigate to Zerodha login
         login_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={API_KEY}"

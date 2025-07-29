@@ -1,106 +1,135 @@
-# Zerodha Stock Tracker Backend
+# Zerodha Backend API
 
-This is the backend server for the Zerodha Stock Tracker Flutter app. It provides APIs to fetch real-time stock data from Zerodha's Kite API.
-
-## Setup Instructions
-
-### 1. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Environment Configuration
-
-Create a `.env` file in the Backend directory with the following variables:
-
-```env
-# Zerodha API Configuration
-KITE_API_KEY=your_api_key_here
-KITE_API_SECRET=your_api_secret_here
-KITE_ACCESS_TOKEN=your_access_token_here
-
-# Server Configuration
-FLASK_ENV=development
-FLASK_DEBUG=True
-```
-
-### 3. Get Zerodha API Credentials
-
-1. Go to [Zerodha Developers](https://developers.kite.trade/)
-2. Create a new application
-3. Get your API Key and API Secret
-4. Use the `access_token.py` script to generate an access token:
-
-```bash
-python access_token.py
-```
-
-### 4. Run the Server
-
-```bash
-python main.py
-```
-
-The server will start on:
-- Flask API: http://localhost:5000
-- WebSocket: ws://localhost:6789
-
-## API Endpoints
-
-### GET /api/stocks
-Get all available stocks with pagination and search.
-
-**Query Parameters:**
-- `page` (optional): Page number (default: 1)
-- `limit` (optional): Items per page (default: 50)
-- `search` (optional): Search term for stock name or symbol
-
-### GET /api/stocks/popular
-Get list of popular stocks.
-
-### GET /api/stocks/{symbol}
-Get detailed information for a specific stock.
-
-### GET /api/quote/{symbol}
-Get real-time quote for a specific stock.
-
-### GET /api/search
-Search stocks by symbol or name.
-
-**Query Parameters:**
-- `q` (required): Search query
-
-### GET /api/market_status
-Get current market status.
-
-## WebSocket
-
-The server also provides a WebSocket connection for real-time data:
-
-- **URL**: ws://localhost:6789
-- **Data Format**: JSON with tick data and market status
+A Flask-based backend API for Zerodha trading integration with real-time market data, WebSocket support, and automated token recovery.
 
 ## Features
 
-- Real-time stock data from Zerodha Kite API
-- Instrument caching for better performance
-- WebSocket support for live updates
-- Search and filtering capabilities
-- Historical data support
-- Error handling and logging
+- Real-time stock data via Zerodha WebSocket
+- Stock search and details
+- Market news aggregation
+- Wishlist management with Supabase
+- Automated Zerodha token recovery using Selenium
+- WebSocket support for live price updates
 
-## Troubleshooting
+## Docker Setup for Render Deployment
 
-1. **API Key/Secret Issues**: Make sure your Zerodha API credentials are correct
-2. **Access Token Expired**: Regenerate access token using `access_token.py`
-3. **Connection Issues**: Check if Zerodha servers are accessible
-4. **Rate Limiting**: The API has rate limits, implement proper error handling
+This backend is configured to run on Render with Docker support, specifically for the `/api/recover_zerodha_token` route which requires Chrome and ChromeDriver for Selenium automation.
 
-## Development
+### Prerequisites
 
-- The server uses Flask for the REST API
-- WebSocket support for real-time data
-- CORS enabled for frontend integration
-- Comprehensive error handling
-- Logging for debugging 
+1. **Render Account**: Sign up at [render.com](https://render.com)
+2. **Environment Variables**: Set up all required environment variables in Render dashboard
+
+### Required Environment Variables
+
+Set these in your Render dashboard:
+
+```
+KITE_API_KEY=your_zerodha_api_key
+KITE_API_SECRET=your_zerodha_api_secret
+KITE_USERNAME=your_zerodha_username
+KITE_PASSWORD=your_zerodha_password
+TOTP_SECRET=your_totp_secret
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+FINNHUB_API_KEY=your_finnhub_api_key
+FMP_API_KEY=your_fmp_api_key
+```
+
+### Deployment Steps
+
+1. **Connect Repository**: Connect your GitHub repository to Render
+2. **Create Web Service**: Choose "Web Service" and select your repository
+3. **Configure Build Settings**:
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `gunicorn --worker-class gevent --workers 1 --bind 0.0.0.0:$PORT app:app`
+4. **Set Environment Variables**: Add all required environment variables
+5. **Deploy**: Click "Create Web Service"
+
+### Docker Configuration
+
+The application uses a custom Dockerfile that:
+
+- Installs Google Chrome and ChromeDriver for Selenium automation
+- Sets up virtual display (Xvfb) for headless browser operation
+- Configures all necessary environment variables
+- Runs Chrome tests before starting the Flask application
+
+### API Endpoints
+
+#### Core Endpoints
+- `GET /api/stocks` - Get all stocks with pagination
+- `GET /api/stocks/popular` - Get popular stocks
+- `GET /api/stocks/<symbol>` - Get detailed stock information
+- `POST /api/stocks/batch_quotes` - Get quotes for multiple stocks
+- `GET /api/search?q=<query>` - Search stocks
+
+#### Authentication & Token Management
+- `POST /api/recover_zerodha_token` - **Automated Zerodha token recovery** (requires Chrome/ChromeDriver)
+
+#### Wishlist Management
+- `POST /api/wishlist` - Add stock to wishlist
+- `GET /api/wishlist/<user_id>` - Get user's wishlist
+- `GET /api/wishlist/details/<user_id>` - Get wishlist with full stock details
+- `DELETE /api/wishlist` - Remove stock from wishlist
+
+#### Market Data
+- `GET /api/market_status` - Get market status
+- `GET /api/news` - Get market news
+- `GET /api/stock_events/<symbol>` - Get stock events (earnings, dividends, etc.)
+
+#### WebSocket
+- WebSocket connection for real-time tick data
+- Event: `tick_data` - Real-time stock price updates
+
+### Testing the Deployment
+
+After deployment, test the Chrome setup:
+
+```bash
+curl -X POST https://your-render-app.onrender.com/api/recover_zerodha_token
+```
+
+### Troubleshooting
+
+#### Chrome/ChromeDriver Issues
+If the `/api/recover_zerodha_token` route fails:
+
+1. Check Render logs for Chrome installation errors
+2. Verify environment variables are set correctly
+3. Ensure the Docker build completed successfully
+
+#### Common Issues
+- **Chrome not found**: Check if Chrome binary path is correct
+- **ChromeDriver version mismatch**: ChromeDriver is auto-installed to match Chrome version
+- **Permission denied**: ChromeDriver should have execute permissions
+
+### Local Development
+
+For local development without Docker:
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables
+export KITE_API_KEY=your_key
+# ... set other variables
+
+# Run the application
+python app.py
+```
+
+### Security Notes
+
+- Never commit API keys or secrets to version control
+- Use environment variables for all sensitive data
+- The `/api/recover_zerodha_token` endpoint should be protected in production
+- Consider rate limiting for public endpoints
+
+### Performance
+
+- WebSocket connection is limited to popular stocks to avoid hitting Zerodha's 4000 instrument limit
+- Chrome automation is optimized for headless operation
+- Database queries are cached where appropriate 

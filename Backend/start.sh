@@ -8,12 +8,11 @@ echo "CHROMEDRIVER_BIN: $CHROMEDRIVER_BIN"
 echo "DISPLAY: $DISPLAY"
 
 echo "=== Checking Chrome binaries ==="
-ls -la /usr/bin/chromium* || echo "No chromium binaries found"
-ls -la /usr/bin/chromedriver || echo "chromedriver not found"
+ls -la /usr/bin/google-chrome || echo "Google Chrome not found"
+ls -la /usr/local/bin/chromedriver || echo "ChromeDriver not found"
 
 echo "=== Checking which commands ==="
-which chromium || echo "chromium not found"
-which chromium-browser || echo "chromium-browser not found"
+which google-chrome || echo "google-chrome not found"
 which chromedriver || echo "chromedriver not found"
 
 # Start virtual display for Selenium
@@ -22,6 +21,15 @@ Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
 
 # Wait a moment for Xvfb to start
 sleep 2
+
+# Run Docker test to verify Chrome setup
+echo "=== Running Docker Chrome test ==="
+python test_docker.py
+if [ $? -ne 0 ]; then
+    echo "❌ Docker Chrome test failed. Starting Flask app anyway..."
+else
+    echo "✅ Docker Chrome test passed!"
+fi
 
 echo "=== Starting Flask application ==="
 # Start the Flask application
