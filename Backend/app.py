@@ -256,6 +256,82 @@ def get_stock_detail(symbol):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/stocks/batch_quotes', methods=['POST'])
+def get_batch_quotes():
+    """Get quote data for multiple stocks in a single request"""
+    try:
+        data = request.get_json()
+        symbols = data.get('symbols', [])
+        
+        if not symbols:
+            return jsonify({"error": "Symbols list is required"}), 400
+        
+        # Limit to 50 symbols to prevent abuse
+        if len(symbols) > 50:
+            symbols = symbols[:50]
+        
+        quotes = {}
+        instruments = get_all_instruments()
+        
+        # Prepare instrument tokens for batch quote
+        instrument_tokens = []
+        symbol_to_token = {}
+        
+        for symbol in symbols:
+            symbol_upper = symbol.upper()
+            for inst in instruments:
+                if inst['tradingsymbol'] == symbol_upper:
+                    instrument_tokens.append(inst['instrument_token'])
+                    symbol_to_token[symbol_upper] = inst['instrument_token']
+                    break
+        
+        if not instrument_tokens:
+            return jsonify({"quotes": {}})
+        
+        try:
+            # Get batch quotes from Zerodha
+            batch_quotes = kite.quote([f"NSE:{symbol}" for symbol in symbols])
+            
+            # Process each quote
+            for symbol in symbols:
+                symbol_upper = symbol.upper()
+                quote_key = f"NSE:{symbol_upper}"
+                
+                if quote_key in batch_quotes:
+                    quote_data = batch_quotes[quote_key]
+                    
+                    # Calculate change and change_percent
+                    last_price = quote_data.get('last_price')
+                    ohlc = quote_data.get('ohlc', {})
+                    close = ohlc.get('close') if ohlc else quote_data.get('close')
+                    
+                    if close is None:
+                        close = quote_data.get('close')
+                    
+                    if last_price is not None and close not in (None, 0):
+                        change = last_price - close
+                        change_percent = ((last_price - close) / close) * 100 if close != 0 else 0
+                        quote_data['change'] = change
+                        quote_data['change_percent'] = change_percent
+                    
+                    quotes[symbol_upper] = quote_data
+                else:
+                    quotes[symbol_upper] = None
+                    
+        except Exception as e:
+            print(f"Error fetching batch quotes: {e}")
+            # Return empty quotes if batch fails
+            for symbol in symbols:
+                quotes[symbol.upper()] = None
+        
+        return jsonify({
+            "quotes": quotes,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/market_status', methods=['GET'])
 def get_market_status():
     """Get current market status"""
@@ -557,21 +633,66 @@ def recover_zerodha_token_route():
     # Supabase setup
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    opts = Options()
-    opts.add_argument("--start-maximized")
-    opts.add_argument("--disable-blink-features=AutomationControlled")
-    opts.add_experimental_option("excludeSwitches", ["enable-automation"])
-    opts.add_experimental_option("useAutomationExtension", False)
-    # opts.add_argument("--headless")  # Disabled for debugging
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
-    opts.binary_location ="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
-    wait = WebDriverWait(driver, 30)
-    result = {"success": False, "access_token": None, "error": None, "request_token": None, "supabase_response": None}
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-plugins")
+    chrome_options.add_argument("--disable-images")
+    chrome_options.add_argument("--disable-web-security")
+    chrome_options.add_argument("--allow-running-insecure-content")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
+    chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
+
+    # Check if Chrome and ChromeDriver exist
+    chrome_bin = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
+    chromedriver_bin = os.getenv("CHROMEDRIVER_BIN", "/usr/local/bin/chromedriver")
+    
+    print(f"Checking Chrome binary: {chrome_bin}")
+    print(f"Checking ChromeDriver binary: {chromedriver_bin}")
+    
+    # Check if files exist
+    import subprocess
     try:
+        result = subprocess.run(['ls', '-la', chrome_bin], capture_output=True, text=True)
+        print(f"Chrome binary check: {result.stdout}")
+    except Exception as e:
+        print(f"Error checking Chrome binary: {e}")
+    
+    try:
+        result = subprocess.run(['ls', '-la', chromedriver_bin], capture_output=True, text=True)
+        print(f"ChromeDriver binary check: {result.stdout}")
+    except Exception as e:
+        print(f"Error checking ChromeDriver binary: {e}")
+    
+    # Use system ChromeDriver directly
+    driver = webdriver.Chrome(
+        service=Service(chromedriver_bin),
+        options=chrome_options
+    )
+    wait = WebDriverWait(driver, 30)
+
+    result = {
+        "success": False,
+        "access_token": None,
+        "error": None,
+        "request_token": None,
+        "supabase_response": None
+    }
+
+    try:
+        print("Starting Zerodha token recovery process...")
+        print(f"Using Chrome binary: {os.getenv('CHROME_BIN', '/usr/bin/google-chrome')}")
+        print(f"Using ChromeDriver: {os.getenv('CHROMEDRIVER_BIN', '/usr/local/bin/chromedriver')}")
+        
         # Step 1: Navigate to Zerodha login
         login_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={API_KEY}"
+        print(f"Navigating to: {login_url}")
         driver.get(login_url)
 
         # Step 2: Enter username and password

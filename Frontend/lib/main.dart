@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'stock_list_page.dart';
 import 'auth_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -6,11 +7,17 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load environment variables
   await dotenv.load(fileName: "assets/.env");
+  
+  // Initialize Supabase
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
+  
+  // Run the app with performance optimizations
   runApp(StockApp());
 }
 
@@ -19,6 +26,10 @@ class StockApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Stock Tracker',
+      // Performance optimizations for release builds
+      debugShowCheckedModeBanner: false,
+      showPerformanceOverlay: false,
+      showSemanticsDebugger: false,
       theme: ThemeData.light().copyWith(
         scaffoldBackgroundColor: Colors.grey[100],
         cardColor: Colors.white,

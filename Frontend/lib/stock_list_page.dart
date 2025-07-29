@@ -7,6 +7,7 @@ import 'news_page.dart';
 import 'auth_service.dart';
 import 'dart:async';
 import 'events_page.dart';
+import 'package:flutter/foundation.dart';
 
 class StockListPage extends StatefulWidget {
   @override
@@ -25,6 +26,12 @@ class _StockListPageState extends State<StockListPage> {
   bool hasError = false;
   String errorMessage = '';
   Set<String> wishlistSymbols = {};
+  
+  // Pagination variables
+  int currentPage = 1;
+  bool isLoadingMore = false;
+  bool hasMoreData = true;
+  static const int pageSize = 50;
 
   List<String> sectors = ['All', 'Technology', 'Banking & Finance', 'Healthcare', 'Automotive', 'Oil & Gas', 'Power & Energy', 'Others'];
   List<String> ratings = ['All', 'Buy', 'Hold', 'Sell'];
@@ -33,8 +40,24 @@ class _StockListPageState extends State<StockListPage> {
   @override
   void initState() {
     super.initState();
-    _loadStocks();
-    _loadWishlist();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    // Test API connection first
+    final isApiConnected = await StockService.testApiConnection();
+    if (!isApiConnected) {
+      setState(() {
+        isLoading = false;
+        hasError = true;
+        errorMessage = 'Unable to connect to server. Please check your internet connection and try again.';
+      });
+      return;
+    }
+    
+    // Load data if API is connected
+    await _loadStocks();
+    await _loadWishlist();
   }
 
   Future<void> _loadStocks() async {
@@ -44,19 +67,41 @@ class _StockListPageState extends State<StockListPage> {
     });
 
     try {
-      // Load popular stocks first
+      if (kDebugMode) {
+        print('Starting to load stocks...');
+      }
+      
+      // Load popular stocks first (these are most important)
+      if (kDebugMode) {
+        print('Loading popular stocks...');
+      }
       final popularStocksData = await StockService.getPopularStocks();
       final popularStocks = popularStocksData.map((json) => Stock.fromJson(json)).toList();
+      if (kDebugMode) {
+        print('Loaded ${popularStocks.length} popular stocks');
+      }
       
-      // Load all stocks with pagination
-      final stocksData = await StockService.getStocks(page: 1, limit: 100);
+      // Load only first page of stocks initially (reduced from 100 to 50)
+      if (kDebugMode) {
+        print('Loading initial stocks...');
+      }
+      final stocksData = await StockService.getStocks(page: 1, limit: 50);
       final stocks = (stocksData['stocks'] as List)
           .map((json) => Stock.fromJson(json))
           .toList();
+      if (kDebugMode) {
+        print('Loaded ${stocks.length} initial stocks');
+      }
 
       // Combine and fetch quote data for each stock
       final allStocksCombined = [...popularStocks, ...stocks];
+      if (kDebugMode) {
+        print('Fetching quotes for ${allStocksCombined.length} stocks...');
+      }
       final stocksWithQuotes = await _fetchQuotesForStocks(allStocksCombined);
+      if (kDebugMode) {
+        print('Successfully loaded ${stocksWithQuotes.length} stocks with quotes');
+      }
 
       setState(() {
         allStocks = stocksWithQuotes;
@@ -66,6 +111,9 @@ class _StockListPageState extends State<StockListPage> {
 
       _applyFilters();
     } catch (e) {
+      if (kDebugMode) {
+        print('Error in _loadStocks: $e');
+      }
       setState(() {
         isLoading = false;
         hasError = true;
@@ -87,31 +135,102 @@ class _StockListPageState extends State<StockListPage> {
     }
   }
 
+  Future<void> _loadMoreStocks() async {
+    if (isLoadingMore || !hasMoreData) return;
+    
+    setState(() {
+      isLoadingMore = true;
+    });
+    
+    try {
+      final nextPage = currentPage + 1;
+      if (kDebugMode) {
+        print('🔄 Loading more stocks (page $nextPage)...');
+      }
+      
+      final stocksData = await StockService.getStocks(page: nextPage, limit: pageSize);
+      final newStocks = (stocksData['stocks'] as List)
+          .map((json) => Stock.fromJson(json))
+          .toList();
+      
+      if (newStocks.isEmpty) {
+        setState(() {
+          hasMoreData = false;
+          isLoadingMore = false;
+        });
+        return;
+      }
+      
+      // Fetch quotes for new stocks
+      final newStocksWithQuotes = await _fetchQuotesForStocks(newStocks);
+      
+      setState(() {
+        allStocks.addAll(newStocksWithQuotes);
+        currentPage = nextPage;
+        isLoadingMore = false;
+      });
+      
+      _applyFilters();
+      if (kDebugMode) {
+        print('✅ Loaded ${newStocksWithQuotes.length} more stocks');
+      }
+      
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error loading more stocks: $e');
+      }
+      setState(() {
+        isLoadingMore = false;
+      });
+    }
+  }
+
   Future<List<Stock>> _fetchQuotesForStocks(List<Stock> stocks) async {
     final stocksWithQuotes = <Stock>[];
     
-    // Fetch quotes for each stock (limit to first 20 for performance)
-    final stocksToFetch = stocks.take(20).toList();
+    // Increase limit to 50 stocks for better performance (backend limit)
+    final stocksToFetch = stocks.take(50).toList();
+    final symbols = stocksToFetch.map((stock) => stock.symbol).toList();
     
-    for (final stock in stocksToFetch) {
-      try {
-        final stockDetail = await StockService.getStockDetail(stock.symbol);
-        // Use the 'quote' field from the stock detail response
-        final stockWithQuote = Stock.fromJson(stockDetail);
-        
-        stocksWithQuotes.add(stockWithQuote);
-        
-        // Add a small delay to avoid overwhelming the API
-        await Future.delayed(Duration(milliseconds: 100));
-      } catch (e) {
-        print('Error fetching quote for ${stock.symbol}: $e');
-        // Add stock without quote data
-        stocksWithQuotes.add(stock);
+    try {
+      if (kDebugMode) {
+        print('🔄 Fetching batch quotes for ${symbols.length} stocks...');
       }
+      
+      // Use batch quotes API for better performance
+      final batchQuotesResponse = await StockService.getBatchQuotes(symbols);
+      final quotes = batchQuotesResponse['quotes'] as Map<String, dynamic>;
+      
+      if (kDebugMode) {
+        print('✅ Received quotes for ${quotes.length} symbols');
+      }
+      
+      // Update stocks with quote data
+      for (final stock in stocksToFetch) {
+        final quoteData = quotes[stock.symbol.toUpperCase()];
+        if (quoteData != null) {
+          // Create a new stock object with quote data
+          final stockWithQuote = stock.copyWith(
+            quote: quoteData,
+            lastPrice: quoteData['last_price']?.toDouble(),
+            volume: quoteData['volume']?.toDouble(),
+            netChange: quoteData['change']?.toDouble(),
+          );
+          stocksWithQuotes.add(stockWithQuote);
+        } else {
+          stocksWithQuotes.add(stock);
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error fetching batch quotes: $e');
+      }
+      // If batch quotes fail, add stocks without quotes
+      stocksWithQuotes.addAll(stocksToFetch);
     }
     
     // Add remaining stocks without quotes
-    stocksWithQuotes.addAll(stocks.skip(20));
+    stocksWithQuotes.addAll(stocks.skip(50));
     
     return stocksWithQuotes;
   }
@@ -145,12 +264,15 @@ class _StockListPageState extends State<StockListPage> {
       final searchResults = await StockService.searchStocks(query);
       final searchStocks = searchResults.map((json) => Stock.fromJson(json)).toList();
       
-      // Fetch quotes for search results
+      // Fetch quotes for search results using batch API
       final stocksWithQuotes = await _fetchQuotesForStocks(searchStocks);
       
       setState(() {
         filteredStocks = stocksWithQuotes;
         isLoading = false;
+        // Reset pagination for search results
+        currentPage = 1;
+        hasMoreData = false; // Search results don't support pagination
       });
     } catch (e) {
       setState(() {
@@ -399,10 +521,43 @@ class _StockListPageState extends State<StockListPage> {
             SizedBox(height: 8),
             Text(errorMessage, style: TextStyle(color: Colors.grey[600]), textAlign: TextAlign.center),
             SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadStocks,
-              child: Text('Retry'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      isLoading = true;
+                      hasError = false;
+                    });
+                    _initializeApp();
+                  },
+                  child: Text('Retry'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                ),
+                SizedBox(width: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      isLoading = true;
+                      hasError = false;
+                    });
+                    StockService.testApiConnection().then((connected) {
+                      if (connected) {
+                        _initializeApp();
+                      } else {
+                        setState(() {
+                          isLoading = false;
+                          hasError = true;
+                          errorMessage = 'Server is not reachable. Please check your internet connection.';
+                        });
+                      }
+                    });
+                  },
+                  child: Text('Test Connection'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                ),
+              ],
             ),
           ],
         ),
@@ -424,57 +579,90 @@ class _StockListPageState extends State<StockListPage> {
       );
     }
 
-    return ListView.builder(
-      itemCount: filteredStocks.length,
-      itemBuilder: (context, index) {
-        final stock = filteredStocks[index];
-        final hasQuoteData = stock.quote != null;
-        
-        return Card(
-          margin: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          elevation: 3,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.teal.withOpacity(0.1),
-              child: Text(stock.symbol[0], style: TextStyle(color: Colors.teal)),
-            ),
-            title: Text('${stock.symbol} - ${stock.name}', style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (hasQuoteData)
-                  Text(
-                    '₹${stock.lastPrice?.toStringAsFixed(2) ?? 'N/A'} | '
-                    '${stock.quote?['change_percent'] != null ? (stock.quote!['change_percent'] >= 0 ? '+' : '') + stock.quote!['change_percent'].toStringAsFixed(2) : 'N/A'}% | '
-                    '${stock.rating} | ${stock.sector}',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                if (!hasQuoteData)
-                  Text('Quote data loading... | ${stock.sector}',
-                      style: TextStyle(color: Colors.grey[600])),
-                if (hasQuoteData && stock.volume != null)
-                  Text('Volume: ${stock.volume!.toStringAsFixed(0)}', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-              ],
-            ),
-            trailing: IconButton(
-              icon: Icon(
-                wishlistSymbols.contains(stock.symbol) ? Icons.star : Icons.star_border,
-                color: wishlistSymbols.contains(stock.symbol) ? Colors.amber : Colors.teal,
-              ),
-              onPressed: () {
-                _confirmAndToggleWishlist(stock);
-              },
-            ),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => StockDetailPage(stock: stock),
-              ),
-            ),
-          ),
-        );
+    return NotificationListener<ScrollNotification>(
+      onNotification: (ScrollNotification scrollInfo) {
+        if (scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
+          // User reached the bottom, load more stocks
+          if (!isLoadingMore && hasMoreData) {
+            _loadMoreStocks();
+          }
+        }
+        return false;
       },
+      child: ListView.builder(
+        itemCount: filteredStocks.length + (hasMoreData ? 1 : 0),
+        itemBuilder: (context, index) {
+          // Show load more indicator at the end
+          if (index == filteredStocks.length && hasMoreData) {
+            return Container(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                child: isLoadingMore 
+                  ? Column(
+                      children: [
+                        CircularProgressIndicator(color: Colors.teal),
+                        SizedBox(height: 8),
+                        Text('Loading more stocks...', style: TextStyle(color: Colors.grey[600])),
+                      ],
+                    )
+                  : ElevatedButton(
+                      onPressed: _loadMoreStocks,
+                      child: Text('Load More Stocks'),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                    ),
+              ),
+            );
+          }
+          
+          final stock = filteredStocks[index];
+          final hasQuoteData = stock.quote != null;
+          
+          return Card(
+            margin: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            elevation: 3,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Colors.teal.withOpacity(0.1),
+                child: Text(stock.symbol[0], style: TextStyle(color: Colors.teal)),
+              ),
+              title: Text('${stock.symbol} - ${stock.name}', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (hasQuoteData)
+                    Text(
+                      '₹${stock.lastPrice?.toStringAsFixed(2) ?? 'N/A'} | '
+                      '${stock.quote?['change_percent'] != null ? (stock.quote!['change_percent'] >= 0 ? '+' : '') + stock.quote!['change_percent'].toStringAsFixed(2) : 'N/A'}% | '
+                      '${stock.rating} | ${stock.sector}',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  if (!hasQuoteData)
+                    Text('Quote data loading... | ${stock.sector}',
+                        style: TextStyle(color: Colors.grey[600])),
+                  if (hasQuoteData && stock.volume != null)
+                    Text('Volume: ${stock.volume!.toStringAsFixed(0)}', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                ],
+              ),
+              trailing: IconButton(
+                icon: Icon(
+                  wishlistSymbols.contains(stock.symbol) ? Icons.star : Icons.star_border,
+                  color: wishlistSymbols.contains(stock.symbol) ? Colors.amber : Colors.teal,
+                ),
+                onPressed: () {
+                  _confirmAndToggleWishlist(stock);
+                },
+              ),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => StockDetailPage(stock: stock),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 } 

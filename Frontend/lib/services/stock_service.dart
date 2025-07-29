@@ -1,9 +1,22 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
 class StockService {
   // Deployed backend URL
   static const String baseUrl = 'https://zerodha-ay41.onrender.com/api';
+  
+  // HTTP client with optimized configuration for release builds
+  static final http.Client _client = http.Client();
+  
+  // Optimized timeout duration for release builds
+  static const Duration _timeout = Duration(seconds: 15); // Reduced from 30s
+  
+  // Connection pooling and retry configuration
+  static const int _maxRetries = 2;
+  static const Duration _retryDelay = Duration(seconds: 1);
   
   // Get all stocks with pagination and search
   static Future<Map<String, dynamic>> getStocks({
@@ -11,48 +24,94 @@ class StockService {
     int limit = 50,
     String? search,
   }) async {
-    try {
-      final queryParams = <String, String>{
-        'page': page.toString(),
-        'limit': limit.toString(),
-      };
-      
-      if (search != null && search.isNotEmpty) {
-        queryParams['search'] = search;
+    return _retryRequest(() async {
+      try {
+        final queryParams = <String, String>{
+          'page': page.toString(),
+          'limit': limit.toString(),
+        };
+        
+        if (search != null && search.isNotEmpty) {
+          queryParams['search'] = search;
+        }
+        
+        final uri = Uri.parse('$baseUrl/stocks').replace(queryParameters: queryParams);
+        
+        // Only log in debug mode
+        if (kDebugMode) {
+          print('Making request to: $uri');
+        }
+        
+        final response = await _client.get(uri).timeout(_timeout);
+        
+        if (kDebugMode) {
+          print('Response status: ${response.statusCode}');
+          print('Response body length: ${response.body.length}');
+        }
+        
+        if (response.statusCode == 200) {
+          return json.decode(response.body);
+        } else {
+          throw Exception('Failed to load stocks: ${response.statusCode} - ${response.body}');
+        }
+      } on SocketException catch (e) {
+        if (kDebugMode) {
+          print('Network error in getStocks: $e');
+        }
+        throw Exception('Network error: Please check your internet connection');
+      } on TimeoutException catch (e) {
+        if (kDebugMode) {
+          print('Timeout error in getStocks: $e');
+        }
+        throw Exception('Request timeout: Please try again');
+      } catch (e) {
+        if (kDebugMode) {
+          print('Error in getStocks: $e');
+        }
+        throw Exception('Error fetching stocks: $e');
       }
-      
-      final uri = Uri.parse('$baseUrl/stocks').replace(queryParameters: queryParams);
-      print('Making request to: $uri'); // Debug log
-      final response = await http.get(uri);
-      
-      if (response.statusCode == 200) {
-        return json.decode(response.body);
-      } else {
-        throw Exception('Failed to load stocks: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error in getStocks: $e'); // Debug log
-      throw Exception('Error fetching stocks: $e');
-    }
+    });
   }
   
   // Get popular stocks
   static Future<List<Map<String, dynamic>>> getPopularStocks() async {
-    try {
-      final uri = Uri.parse('$baseUrl/stocks/popular');
-      print('Making request to: $uri'); // Debug log
-      final response = await http.get(uri);
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return List<Map<String, dynamic>>.from(data['stocks']);
-      } else {
-        throw Exception('Failed to load popular stocks: ${response.statusCode}');
+    return _retryRequest(() async {
+      try {
+        final uri = Uri.parse('$baseUrl/stocks/popular');
+        
+        if (kDebugMode) {
+          print('Making request to: $uri');
+        }
+        
+        final response = await _client.get(uri).timeout(_timeout);
+        
+        if (kDebugMode) {
+          print('Popular stocks response status: ${response.statusCode}');
+        }
+        
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          return List<Map<String, dynamic>>.from(data['stocks']);
+        } else {
+          throw Exception('Failed to load popular stocks: ${response.statusCode} - ${response.body}');
+        }
+      } on SocketException catch (e) {
+        if (kDebugMode) {
+          print('Network error in getPopularStocks: $e');
+        }
+        throw Exception('Network error: Please check your internet connection');
+      } on TimeoutException catch (e) {
+        if (kDebugMode) {
+          print('Timeout error in getPopularStocks: $e');
+        }
+        throw Exception('Request timeout: Please try again');
+      } catch (e) {
+        if (kDebugMode) {
+          print('Error in getPopularStocks: $e');
+        }
+        throw Exception('Error fetching popular stocks: $e');
       }
-    } catch (e) {
-      print('Error in getPopularStocks: $e'); // Debug log
-      throw Exception('Error fetching popular stocks: $e');
-    }
+    });
   }
   
   // Get detailed stock information
@@ -70,6 +129,51 @@ class StockService {
     } catch (e) {
       throw Exception('Error fetching stock details: $e');
     }
+  }
+
+  // Get batch quotes for multiple stocks (PERFORMANCE OPTIMIZATION)
+  static Future<Map<String, dynamic>> getBatchQuotes(List<String> symbols) async {
+    return _retryRequest(() async {
+      try {
+        final uri = Uri.parse('$baseUrl/stocks/batch_quotes');
+        
+        if (kDebugMode) {
+          print('Making batch quotes request to: $uri');
+          print('Symbols: $symbols');
+        }
+        
+        final response = await _client.post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({'symbols': symbols}),
+        ).timeout(_timeout);
+        
+        if (kDebugMode) {
+          print('Batch quotes response status: ${response.statusCode}');
+        }
+        
+        if (response.statusCode == 200) {
+          return json.decode(response.body);
+        } else {
+          throw Exception('Failed to load batch quotes: ${response.statusCode} - ${response.body}');
+        }
+      } on SocketException catch (e) {
+        if (kDebugMode) {
+          print('Network error in getBatchQuotes: $e');
+        }
+        throw Exception('Network error: Please check your internet connection');
+      } on TimeoutException catch (e) {
+        if (kDebugMode) {
+          print('Timeout error in getBatchQuotes: $e');
+        }
+        throw Exception('Request timeout: Please try again');
+      } catch (e) {
+        if (kDebugMode) {
+          print('Error in getBatchQuotes: $e');
+        }
+        throw Exception('Error fetching batch quotes: $e');
+      }
+    });
   }
   
   // Search stocks
@@ -130,6 +234,30 @@ class StockService {
     }
   }
 
+  // Test API connectivity
+  static Future<bool> testApiConnection() async {
+    try {
+      final uri = Uri.parse('$baseUrl/market_status');
+      
+      if (kDebugMode) {
+        print('Testing API connection to: $uri');
+      }
+      
+      final response = await _client.get(uri).timeout(Duration(seconds: 10));
+      
+      if (kDebugMode) {
+        print('API test response status: ${response.statusCode}');
+      }
+      
+      return response.statusCode == 200;
+    } catch (e) {
+      if (kDebugMode) {
+        print('API connection test failed: $e');
+      }
+      return false;
+    }
+  }
+
   // Remove a stock from the user's wishlist
   static Future<void> removeFromWishlist({required String userId, required String symbol}) async {
     final url = Uri.parse('$baseUrl/wishlist');
@@ -141,5 +269,25 @@ class StockService {
     if (response.statusCode != 200) {
       throw Exception('Failed to remove from wishlist: ${response.body}');
     }
+  }
+
+  // Retry mechanism for network requests
+  static Future<T> _retryRequest<T>(Future<T> Function() request) async {
+    int attempts = 0;
+    while (attempts < _maxRetries) {
+      try {
+        return await request();
+      } catch (e) {
+        attempts++;
+        if (attempts >= _maxRetries) {
+          rethrow;
+        }
+        if (kDebugMode) {
+          print('Request failed, retrying in ${_retryDelay.inSeconds}s... (attempt $attempts/$_maxRetries)');
+        }
+        await Future.delayed(_retryDelay);
+      }
+    }
+    throw Exception('Max retries exceeded');
   }
 } 
