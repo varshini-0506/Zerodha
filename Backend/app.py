@@ -20,7 +20,18 @@ from dotenv import load_dotenv
 import requests
 from supabase import create_client, Client
 from flask_socketio import SocketIO, emit
+import pyotp
+import base64
 
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.common.exceptions import TimeoutException
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
+from urllib.parse import urlparse, parse_qs
 
 # Load environment variables
 load_dotenv()
@@ -604,131 +615,105 @@ def remove_from_wishlist():
     else:
         return jsonify({'error': response.text}), response.status_code
 
-@app.route('/api/recover_zerodha_token', methods=['POST'])
-def recover_zerodha_token_route():
-    """Recover Zerodha access token and store in Supabase"""
-    import time
-    import pyotp
-    from selenium import webdriver
-    from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.chrome.options import Options
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from kiteconnect import KiteConnect
-    from supabase import create_client, Client
-    from webdriver_manager.chrome import ChromeDriverManager
-    from selenium.common.exceptions import StaleElementReferenceException
+import base64
+from flask import jsonify
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+import os, pyotp
+from kiteconnect import KiteConnect
+from urllib.parse import urlparse, parse_qs
+from datetime import datetime
+from supabase import create_client
 
-    # Load environment variables
-    load_dotenv()
-    USER_ID = os.getenv("KITE_USERNAME")
-    PASSWORD = os.getenv("KITE_PASSWORD")
-    TOTP_SECRET = os.getenv("TOTP_SECRET")
-    API_KEY = os.getenv("KITE_API_KEY")
-    API_SECRET = os.getenv("KITE_API_SECRET")
-    SUPABASE_URL = os.getenv("SUPABASE_URL")
-    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-    # Supabase setup
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--disable-plugins")
-    chrome_options.add_argument("--disable-images")
-    chrome_options.add_argument("--disable-web-security")
-    chrome_options.add_argument("--allow-running-insecure-content")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option("useAutomationExtension", False)
-    chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
-
-    # Check if Chrome and ChromeDriver exist
-    chrome_bin = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
-    chromedriver_bin = os.getenv("CHROMEDRIVER_BIN", "/usr/local/bin/chromedriver")
-    
-    print(f"Checking Chrome binary: {chrome_bin}")
-    print(f"Checking ChromeDriver binary: {chromedriver_bin}")
-    
-    # Check if files exist
-    import subprocess
-    try:
-        result = subprocess.run(['ls', '-la', chrome_bin], capture_output=True, text=True)
-        print(f"Chrome binary check: {result.stdout}")
-    except Exception as e:
-        print(f"Error checking Chrome binary: {e}")
-    
-    try:
-        result = subprocess.run(['ls', '-la', chromedriver_bin], capture_output=True, text=True)
-        print(f"ChromeDriver binary check: {result.stdout}")
-    except Exception as e:
-        print(f"Error checking ChromeDriver binary: {e}")
-    
-    # Use system ChromeDriver directly
-    driver = webdriver.Chrome(
-        service=Service(chromedriver_bin),
-        options=chrome_options
-    )
-    wait = WebDriverWait(driver, 30)
-
+@app.route("/api/refresh_zerodha_token", methods=["POST"])
+def refresh_zerodha_token():
     result = {
         "success": False,
-        "access_token": None,
-        "error": None,
-        "request_token": None,
-        "supabase_response": None
+        "access_token": "",
+        "request_token": "",
+        "error": "",
+        "supabase_response": "",
+        "debug_screenshot": "",
+        "debug_html": ""
     }
 
+    driver = None
     try:
-        print("Starting Zerodha token recovery process...")
-        print(f"Using Chrome binary: {os.getenv('CHROME_BIN', '/usr/bin/google-chrome')}")
-        print(f"Using ChromeDriver: {os.getenv('CHROMEDRIVER_BIN', '/usr/local/bin/chromedriver')}")
-        
-        # Step 1: Navigate to Zerodha login
+        # Load secrets
+        Z_USERNAME = os.getenv("KITE_USERNAME", "").strip()
+        Z_PASSWORD = os.getenv("KITE_PASSWORD", "").strip()
+        TOTP_SECRET = os.getenv("TOTP_SECRET", "").strip()
+        API_KEY = os.getenv("KITE_API_KEY", "").strip()
+        API_SECRET = os.getenv("KITE_API_SECRET", "").strip()
+        SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+        SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
+
+        # Validate TOTP secret
+        pyotp.TOTP(TOTP_SECRET).now()
+
+        # Setup Supabase client
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+        # Setup Chrome options
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--window-size=1920,1080")
+
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.set_page_load_timeout(60)
+        wait = WebDriverWait(driver, 40)
+
+        # Step 1: Navigate to login page
         login_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={API_KEY}"
-        print(f"Navigating to: {login_url}")
         driver.get(login_url)
 
         # Step 2: Enter username and password
-        print("Filling username...")
-        username_field = wait.until(EC.presence_of_element_located((By.ID, "userid")))
-        username_field.send_keys(USER_ID)
-        print("Filling password...")
-        driver.find_element(By.ID, "password").send_keys(PASSWORD)
-        print("Submitting login form...")
-        driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+        userid_field = wait.until(EC.presence_of_element_located((By.ID, "userid")))
+        userid_field.clear()
+        userid_field.send_keys(Z_USERNAME)
+        driver.find_element(By.ID, "password").send_keys(Z_PASSWORD)
+        driver.find_element(By.XPATH, "//button[@type='submit']").click()
 
-        print("Waiting for TOTP field to be clickable (after page navigation)...")
-        totp_field = wait.until(EC.element_to_be_clickable((By.ID, "userid")))
-        print("TOTP field found, entering TOTP...")
-        totp = pyotp.TOTP(TOTP_SECRET).now()
-        totp_field.clear()
-        totp_field.send_keys(totp)
-        print("TOTP entered, submitting form...")
-        driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+        # Step 3: Wait for TOTP form to appear
+        try:
+            wait.until(EC.presence_of_element_located(
+                (By.CSS_SELECTOR, "form.twofa-form input#userid")
+            ))
 
-        # Wait for the URL to contain 'request_token=' after TOTP submit
-        print("Waiting for request_token in URL...")
-        wait.until(lambda d: "request_token=" in d.current_url)
-        request_token = driver.current_url.split("request_token=")[-1].split("&")[0]
-        print("Request token found:", request_token)
-        result["request_token"] = request_token
+            # Enter TOTP
+            totp_field = driver.find_element(By.CSS_SELECTOR, "form.twofa-form input#userid")
+            totp_field.clear()
+            totp = pyotp.TOTP(TOTP_SECRET).now()
+            totp_field.send_keys(totp)
 
-        # Close the browser immediately after extracting the request token
-        driver.quit()
-        driver = None
+            # Submit TOTP
+            driver.find_element(By.CSS_SELECTOR, "form.twofa-form button[type='submit']").click()
 
-        # Step 5: Exchange request_token for access_token using KiteConnect
+        except TimeoutException:
+            screenshot_bytes = driver.get_screenshot_as_png()
+            result["debug_screenshot"] = base64.b64encode(screenshot_bytes).decode()
+            result["debug_html"] = driver.page_source
+            raise TimeoutException("TOTP form did not load. Check login flow or credentials.")
+
+        # Step 4: Wait for redirect and extract request_token
+        wait.until(lambda d: "request_token" in d.current_url)
+        redirected_url = driver.current_url
+        parsed = urlparse(redirected_url)
+        request_token = parse_qs(parsed.query).get("request_token", [None])[0]
+        if not request_token:
+            raise Exception("Request token not found in redirected URL")
+
+        # Step 5: Generate access token
         kite = KiteConnect(api_key=API_KEY)
         data = kite.generate_session(request_token, api_secret=API_SECRET)
         access_token = data["access_token"]
-        result["access_token"] = access_token
 
         # Step 6: Store in Supabase
         response = supabase.table("api_tokens").upsert({
@@ -736,20 +721,140 @@ def recover_zerodha_token_route():
             "access_token": access_token,
             "created_at": datetime.now().isoformat()
         }, on_conflict="service").execute()
-        result["supabase_response"] = response.data
+
         result["success"] = True
+        result["access_token"] = access_token
+        result["request_token"] = request_token
+        result["supabase_response"] = response.data
+
+    except TimeoutException as te:
+        result["error"] = f"Timeout: {str(te)}"
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())
+        if driver:
+            try:
+                screenshot_bytes = driver.get_screenshot_as_png()
+                result["debug_screenshot"] = base64.b64encode(screenshot_bytes).decode()
+                result["debug_html"] = driver.page_source
+            except:
+                pass
         result["error"] = str(e)
     finally:
-        # Only call driver.quit() if the driver is still open
-        try:
-            if driver is not None:
-                driver.quit()
-        except:
-            pass
+        if driver:
+            driver.quit()
+
     return jsonify(result)
+
+@app.route('/api/test_webdriver', methods=['POST'])
+def test_webdriver_route():
+    """Test WebDriver using the exact same code as our working test script"""
+    import os
+    import time
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from webdriver_manager.chrome import ChromeDriverManager
+
+    print("=== Testing WebDriver in Route Context ===")
+    
+    # Basic Chrome options (same as test script)
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-web-security")
+    chrome_options.add_argument("--allow-running-insecure-content")
+    chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+    chrome_options.add_argument("--disable-software-rasterizer")
+    chrome_options.add_argument("--disable-background-timer-throttling")
+    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+    chrome_options.add_argument("--disable-renderer-backgrounding")
+    chrome_options.add_argument("--disable-features=TranslateUI")
+    chrome_options.add_argument("--disable-ipc-flooding-protection")
+    chrome_options.add_argument("--disable-default-apps")
+    chrome_options.add_argument("--disable-sync")
+    chrome_options.add_argument("--no-first-run")
+    chrome_options.add_argument("--no-default-browser-check")
+    chrome_options.add_argument("--disable-background-networking")
+    chrome_options.add_argument("--disable-component-extensions-with-background-pages")
+    chrome_options.add_argument("--disable-client-side-phishing-detection")
+    chrome_options.add_argument("--disable-hang-monitor")
+    chrome_options.add_argument("--disable-prompt-on-repost")
+    chrome_options.add_argument("--disable-domain-reliability")
+    chrome_options.add_argument("--remote-debugging-port=9222")
+    chrome_options.add_argument("--remote-debugging-address=0.0.0.0")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
+    chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
+    
+    try:
+        print("1. Installing ChromeDriver...")
+        chromedriver_path = ChromeDriverManager().install()
+        print(f"   ChromeDriver installed at: {chromedriver_path}")
+        
+        print("2. Creating ChromeService...")
+        service = Service(executable_path=chromedriver_path)
+        
+        print("3. Creating WebDriver...")
+        driver = webdriver.Chrome(
+            service=service,
+            options=chrome_options
+        )
+        
+        print("4. Setting timeouts...")
+        driver.set_page_load_timeout(60)
+        driver.implicitly_wait(10)
+        
+        print("5. Testing with Google...")
+        driver.get("https://www.google.com")
+        print(f"   Google title: {driver.title}")
+        
+        print("6. Testing with Zerodha...")
+        driver.get("https://kite.zerodha.com")
+        print(f"   Zerodha title: {driver.title}")
+        
+        print("7. Testing login page...")
+        login_url = "https://kite.zerodha.com/connect/login?v=3&api_key=i3lwf5icae8f9ukq"
+        driver.get(login_url)
+        print(f"   Login page title: {driver.title}")
+        
+        print("8. Looking for form elements...")
+        try:
+            userid_field = driver.find_element(By.ID, "userid")
+            print("   ✓ User ID field found")
+        except Exception as e:
+            print(f"   ✗ User ID field not found: {e}")
+        
+        try:
+            password_field = driver.find_element(By.ID, "password")
+            print("   ✓ Password field found")
+        except Exception as e:
+            print(f"   ✗ Password field not found: {e}")
+        
+        print("9. Closing WebDriver...")
+        driver.quit()
+        
+        print("✅ All tests passed!")
+        return jsonify({
+            "success": True,
+            "message": "WebDriver test passed successfully",
+            "google_title": "Google",
+            "zerodha_title": "Login to Kite by Zerodha - Fast, easy trading and investment platform",
+            "login_title": "Kite Connect Login / Kite by Zerodha"
+        })
+        
+    except Exception as e:
+        print(f"❌ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        })
 
 @app.route('/api/stock_events/<symbol>', methods=['GET'])
 def get_combined_stock_events(symbol):
@@ -884,4 +989,4 @@ if __name__ == "__main__":
     # Start background tasks using SocketIO's method
     socketio.start_background_task(start_kite_ws)
     socketio.start_background_task(background_tick_sender)
-    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000))) 

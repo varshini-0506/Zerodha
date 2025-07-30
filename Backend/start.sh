@@ -4,16 +4,13 @@ echo "=== Starting Zerodha Backend ==="
 echo "Current directory: $(pwd)"
 echo "Environment variables:"
 echo "CHROME_BIN: $CHROME_BIN"
-echo "CHROMEDRIVER_BIN: $CHROMEDRIVER_BIN"
 echo "DISPLAY: $DISPLAY"
 
-echo "=== Checking Chrome binaries ==="
+echo "=== Checking Chrome binary ==="
 ls -la /usr/bin/google-chrome || echo "Google Chrome not found"
-ls -la /usr/local/bin/chromedriver || echo "ChromeDriver not found"
 
 echo "=== Checking which commands ==="
 which google-chrome || echo "google-chrome not found"
-which chromedriver || echo "chromedriver not found"
 
 # Start virtual display for Selenium
 echo "=== Starting virtual display ==="

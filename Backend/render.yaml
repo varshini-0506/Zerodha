@@ -1,12 +1,9 @@
 services:
   - type: web
     name: zerodha-backend
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --worker-class gevent --workers 1 --bind 0.0.0.0:$PORT app:app
+    env: docker
+    dockerfilePath: ./dockerfile
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.10.0
       - key: KITE_API_KEY
         sync: false
       - key: KITE_API_SECRET

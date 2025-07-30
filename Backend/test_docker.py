@@ -13,14 +13,12 @@ def test_chrome_installation():
     
     # Check environment variables
     chrome_bin = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
-    chromedriver_bin = os.getenv("CHROMEDRIVER_BIN", "/usr/local/bin/chromedriver")
     display = os.getenv("DISPLAY", ":99")
     
     print(f"CHROME_BIN: {chrome_bin}")
-    print(f"CHROMEDRIVER_BIN: {chromedriver_bin}")
     print(f"DISPLAY: {display}")
     
-    # Check if files exist
+    # Check if Chrome file exists
     try:
         result = subprocess.run(['ls', '-la', chrome_bin], capture_output=True, text=True)
         if result.returncode == 0:
@@ -30,17 +28,6 @@ def test_chrome_installation():
             return False
     except Exception as e:
         print(f"❌ Error checking Chrome binary: {e}")
-        return False
-    
-    try:
-        result = subprocess.run(['ls', '-la', chromedriver_bin], capture_output=True, text=True)
-        if result.returncode == 0:
-            print(f"✅ ChromeDriver binary found: {result.stdout.strip()}")
-        else:
-            print(f"❌ ChromeDriver binary not found: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"❌ Error checking ChromeDriver binary: {e}")
         return False
     
     # Test Chrome version
@@ -53,18 +40,6 @@ def test_chrome_installation():
             return False
     except Exception as e:
         print(f"❌ Error testing Chrome version: {e}")
-        return False
-    
-    # Test ChromeDriver version
-    try:
-        result = subprocess.run([chromedriver_bin, '--version'], capture_output=True, text=True)
-        if result.returncode == 0:
-            print(f"✅ ChromeDriver version: {result.stdout.strip()}")
-        else:
-            print(f"❌ Error getting ChromeDriver version: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"❌ Error testing ChromeDriver version: {e}")
         return False
     
     return True
@@ -89,6 +64,8 @@ def test_webdriver_creation():
         from selenium import webdriver
         from selenium.webdriver.chrome.service import Service
         from selenium.webdriver.chrome.options import Options
+        from webdriver_manager.chrome import ChromeDriverManager
+        from selenium.webdriver.chrome.service import Service as ChromeService
         
         chrome_options = Options()
         chrome_options.add_argument("--headless")
@@ -97,10 +74,8 @@ def test_webdriver_creation():
         chrome_options.add_argument("--disable-gpu")
         chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
         
-        chromedriver_bin = os.getenv("CHROMEDRIVER_BIN", "/usr/local/bin/chromedriver")
-        
         driver = webdriver.Chrome(
-            service=Service(chromedriver_bin),
+            service=ChromeService(ChromeDriverManager().install()),
             options=chrome_options
         )
         
