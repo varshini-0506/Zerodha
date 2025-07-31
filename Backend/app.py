@@ -677,9 +677,22 @@ def refresh_zerodha_token():
         # ---------- Setup Supabase ----------
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-        # ---------- Setup Chrome (optimized for Chromium) ----------
+        # ---------- Setup Chrome (optimized for Railway) ----------
         chrome_options = Options()
-        chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium")
+        
+        # Try to find Chrome binary
+        chrome_bin = os.getenv("CHROME_BIN")
+        if not chrome_bin:
+            for path in ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"]:
+                if os.path.exists(path):
+                    chrome_bin = path
+                    break
+        
+        if chrome_bin:
+            chrome_options.binary_location = chrome_bin
+            print(f"Using Chrome binary: {chrome_bin}")
+        else:
+            print("No Chrome binary found, using default")
 
         chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--no-sandbox")

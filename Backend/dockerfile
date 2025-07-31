@@ -1,14 +1,14 @@
 # Use an official Python image with a specific version for stability
 FROM python:3.10-slim
 
-# Set environment variables for Chromium
-ENV CHROME_BIN=/usr/bin/chromium
+# Set environment variables for Chrome/Chromium
+ENV CHROME_BIN=/usr/bin/google-chrome
 ENV CHROMEDRIVER_BIN=/usr/bin/chromedriver
 ENV DISPLAY=:99
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies including Chromium with better error handling
+# Install system dependencies and Chrome with multiple fallback options
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
@@ -33,10 +33,24 @@ RUN apt-get update && \
     libxss1 \
     libxtst6 \
     xdg-utils \
-    chromium \
-    chromium-driver \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Install Google Chrome with fallback to Chromium
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - && \
+    echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
+    apt-get update && \
+    apt-get install -y google-chrome-stable && \
+    rm -rf /var/lib/apt/lists/* || \
+    (echo "Google Chrome installation failed, trying Chromium..." && \
+     apt-get update && \
+     apt-get install -y chromium chromium-driver && \
+     ln -sf /usr/bin/chromium /usr/bin/google-chrome && \
+     rm -rf /var/lib/apt/lists/*)
+
+# Verify Chrome installation
+RUN google-chrome --version || chromium --version || echo "Chrome installation verification failed"
 
 # Set work directory
 WORKDIR /app

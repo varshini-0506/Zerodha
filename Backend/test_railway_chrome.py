@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to verify Chrome and ChromeDriver setup in Docker container
+Test script specifically for Railway deployment to verify Chrome and WebDriver setup
 """
 
 import os
@@ -8,14 +8,14 @@ import subprocess
 import sys
 
 def test_chrome_installation():
-    """Test if Chrome is properly installed"""
-    print("=== Testing Chrome Installation ===")
+    """Test if Chrome is properly installed in Railway"""
+    print("=== Testing Chrome Installation in Railway ===")
     
     # Check environment variables
-    chrome_bin = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
+    chrome_bin = os.getenv("CHROME_BIN")
     display = os.getenv("DISPLAY", ":99")
     
-    print(f"CHROME_BIN: {chrome_bin}")
+    print(f"CHROME_BIN env var: {chrome_bin}")
     print(f"DISPLAY: {display}")
     
     # Try multiple Chrome binary locations
@@ -23,34 +23,36 @@ def test_chrome_installation():
         "/usr/bin/google-chrome",
         "/usr/bin/chromium",
         "/usr/bin/chromium-browser",
+        "/opt/google/chrome/chrome",
         chrome_bin
     ]
     
     found_chrome = None
     for path in chrome_paths:
-        try:
-            result = subprocess.run(['ls', '-la', path], capture_output=True, text=True)
-            if result.returncode == 0:
-                print(f"✅ Chrome binary found at: {path}")
-                found_chrome = path
-                break
-        except Exception:
-            continue
+        if path and os.path.exists(path):
+            try:
+                result = subprocess.run([path, '--version'], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    print(f"✅ Chrome found at: {path}")
+                    print(f"   Version: {result.stdout.strip()}")
+                    found_chrome = path
+                    break
+            except Exception as e:
+                print(f"   ❌ Error testing {path}: {e}")
+                continue
     
     if not found_chrome:
-        print("❌ No Chrome binary found in common locations")
-        return False
-    
-    # Test Chrome version
-    try:
-        result = subprocess.run([chrome_bin, '--version'], capture_output=True, text=True)
-        if result.returncode == 0:
-            print(f"✅ Chrome version: {result.stdout.strip()}")
-        else:
-            print(f"❌ Error getting Chrome version: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"❌ Error testing Chrome version: {e}")
+        print("❌ No working Chrome binary found")
+        print("Available files:")
+        try:
+            result = subprocess.run(['find', '/usr/bin', '-name', '*chrome*', '-o', '-name', '*chromium*'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                print(result.stdout)
+            else:
+                print("No Chrome/Chromium files found")
+        except Exception as e:
+            print(f"Error searching for Chrome files: {e}")
         return False
     
     return True
@@ -62,6 +64,7 @@ def test_selenium_import():
         from selenium import webdriver
         from selenium.webdriver.chrome.service import Service
         from selenium.webdriver.chrome.options import Options
+        from webdriver_manager.chrome import ChromeDriverManager
         print("✅ Selenium imports successful")
         return True
     except ImportError as e:
@@ -69,14 +72,13 @@ def test_selenium_import():
         return False
 
 def test_webdriver_creation():
-    """Test if WebDriver can be created"""
+    """Test if WebDriver can be created in Railway"""
     print("\n=== Testing WebDriver Creation ===")
     try:
         from selenium import webdriver
         from selenium.webdriver.chrome.service import Service
         from selenium.webdriver.chrome.options import Options
         from webdriver_manager.chrome import ChromeDriverManager
-        from selenium.webdriver.chrome.service import Service as ChromeService
         
         chrome_options = Options()
         chrome_options.add_argument("--headless")
@@ -85,6 +87,7 @@ def test_webdriver_creation():
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-software-rasterizer")
         chrome_options.add_argument("--disable-setuid-sandbox")
+        chrome_options.add_argument("--remote-debugging-port=9222")
         
         # Try to find Chrome binary
         chrome_bin = os.getenv("CHROME_BIN")
@@ -100,12 +103,16 @@ def test_webdriver_creation():
         else:
             print("No Chrome binary found, using default")
         
-        driver = webdriver.Chrome(
-            service=ChromeService(ChromeDriverManager().install()),
-            options=chrome_options
-        )
-        
-        print("✅ WebDriver created successfully")
+        # Try to create driver with webdriver-manager
+        try:
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            print("✅ WebDriver created with webdriver-manager")
+        except Exception as e:
+            print(f"webdriver-manager failed: {e}")
+            # Fallback to system chromedriver
+            driver = webdriver.Chrome(options=chrome_options)
+            print("✅ WebDriver created with system chromedriver")
         
         # Test basic navigation
         driver.get("https://www.google.com")
@@ -124,7 +131,7 @@ def test_webdriver_creation():
 
 def main():
     """Run all tests"""
-    print("Starting Docker Chrome/ChromeDriver tests...\n")
+    print("Starting Railway Chrome/WebDriver tests...\n")
     
     tests = [
         test_chrome_installation,
@@ -144,10 +151,10 @@ def main():
     print(f"Passed: {passed}/{total}")
     
     if passed == total:
-        print("✅ All tests passed! Docker setup is ready for Zerodha token recovery.")
+        print("✅ All tests passed! Railway setup is ready for Zerodha token recovery.")
         sys.exit(0)
     else:
-        print("❌ Some tests failed. Please check the Docker setup.")
+        print("❌ Some tests failed. Please check the Railway setup.")
         sys.exit(1)
 
 if __name__ == "__main__":

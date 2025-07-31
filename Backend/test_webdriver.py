@@ -46,7 +46,19 @@ def test_webdriver_creation():
     chrome_options.add_argument("--remote-debugging-address=0.0.0.0")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option("useAutomationExtension", False)
-    chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
+            # Try to find Chrome binary
+        chrome_bin = os.getenv("CHROME_BIN")
+        if not chrome_bin:
+            for path in ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"]:
+                if os.path.exists(path):
+                    chrome_bin = path
+                    break
+        
+        if chrome_bin:
+            chrome_options.binary_location = chrome_bin
+            print(f"Using Chrome binary: {chrome_bin}")
+        else:
+            print("No Chrome binary found, using default")
     
     try:
         print("1. Installing ChromeDriver...")
