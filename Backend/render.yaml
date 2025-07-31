@@ -25,8 +25,8 @@ services:
       - key: FMP_API_KEY
         sync: false
       - key: CHROME_BIN
-        value: /usr/bin/google-chrome
+        value: /usr/bin/chromium
       - key: CHROMEDRIVER_BIN
-        value: /usr/local/bin/chromedriver
+        value: /usr/bin/chromedriver
       - key: DISPLAY
         value: :99 

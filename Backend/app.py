@@ -616,135 +616,6 @@ def remove_from_wishlist():
         return jsonify({'error': response.text}), response.status_code
 
 import base64
-from flask import jsonify
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
-import os, pyotp
-from kiteconnect import KiteConnect
-from urllib.parse import urlparse, parse_qs
-from datetime import datetime
-from supabase import create_client
-
-@app.route("/api/refresh_zerodha_token", methods=["POST"])
-def refresh_zerodha_token():
-    result = {
-        "success": False,
-        "access_token": "",
-        "request_token": "",
-        "error": "",
-        "supabase_response": "",
-        "debug_screenshot": "",
-        "debug_html": ""
-    }
-
-    driver = None
-    try:
-        # Load secrets
-        Z_USERNAME = os.getenv("KITE_USERNAME", "").strip()
-        Z_PASSWORD = os.getenv("KITE_PASSWORD", "").strip()
-        TOTP_SECRET = os.getenv("TOTP_SECRET", "").strip()
-        API_KEY = os.getenv("KITE_API_KEY", "").strip()
-        API_SECRET = os.getenv("KITE_API_SECRET", "").strip()
-        SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
-        SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
-
-        # Validate TOTP secret
-        pyotp.TOTP(TOTP_SECRET).now()
-
-        # Setup Supabase client
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-        # Setup Chrome options
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--window-size=1920,1080")
-
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.set_page_load_timeout(60)
-        wait = WebDriverWait(driver, 40)
-
-        # Step 1: Navigate to login page
-        login_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={API_KEY}"
-        driver.get(login_url)
-
-        # Step 2: Enter username and password
-        userid_field = wait.until(EC.presence_of_element_located((By.ID, "userid")))
-        userid_field.clear()
-        userid_field.send_keys(Z_USERNAME)
-        driver.find_element(By.ID, "password").send_keys(Z_PASSWORD)
-        driver.find_element(By.XPATH, "//button[@type='submit']").click()
-
-        # Step 3: Wait for TOTP form to appear
-        try:
-            wait.until(EC.presence_of_element_located(
-                (By.CSS_SELECTOR, "form.twofa-form input#userid")
-            ))
-
-            # Enter TOTP
-            totp_field = driver.find_element(By.CSS_SELECTOR, "form.twofa-form input#userid")
-            totp_field.clear()
-            totp = pyotp.TOTP(TOTP_SECRET).now()
-            totp_field.send_keys(totp)
-
-            # Submit TOTP
-            driver.find_element(By.CSS_SELECTOR, "form.twofa-form button[type='submit']").click()
-
-        except TimeoutException:
-            screenshot_bytes = driver.get_screenshot_as_png()
-            result["debug_screenshot"] = base64.b64encode(screenshot_bytes).decode()
-            result["debug_html"] = driver.page_source
-            raise TimeoutException("TOTP form did not load. Check login flow or credentials.")
-
-        # Step 4: Wait for redirect and extract request_token
-        wait.until(lambda d: "request_token" in d.current_url)
-        redirected_url = driver.current_url
-        parsed = urlparse(redirected_url)
-        request_token = parse_qs(parsed.query).get("request_token", [None])[0]
-        if not request_token:
-            raise Exception("Request token not found in redirected URL")
-
-        # Step 5: Generate access token
-        kite = KiteConnect(api_key=API_KEY)
-        data = kite.generate_session(request_token, api_secret=API_SECRET)
-        access_token = data["access_token"]
-
-        # Step 6: Store in Supabase
-        response = supabase.table("api_tokens").upsert({
-            "service": "zerodha",
-            "access_token": access_token,
-            "created_at": datetime.now().isoformat()
-        }, on_conflict="service").execute()
-
-        result["success"] = True
-        result["access_token"] = access_token
-        result["request_token"] = request_token
-        result["supabase_response"] = response.data
-
-    except TimeoutException as te:
-        result["error"] = f"Timeout: {str(te)}"
-    except Exception as e:
-        if driver:
-            try:
-                screenshot_bytes = driver.get_screenshot_as_png()
-                result["debug_screenshot"] = base64.b64encode(screenshot_bytes).decode()
-                result["debug_html"] = driver.page_source
-            except:
-                pass
-        result["error"] = str(e)
-    finally:
-        if driver:
-            driver.quit()
-
-    return jsonify(result)
-
-import base64
 import socket
 import requests
 from flask import jsonify
@@ -760,8 +631,8 @@ from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 from supabase import create_client
 
-@app.route("/api/refresh_zerodha_token_debug", methods=["POST"])
-def refresh_zerodha_token_debug():
+@app.route("/api/refresh_zerodha_token", methods=["POST"])
+def refresh_zerodha_token():
     result = {
         "success": False,
         "access_token": "",
@@ -806,17 +677,19 @@ def refresh_zerodha_token_debug():
         # ---------- Setup Supabase ----------
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-        # ---------- Setup Chrome ----------
+        # ---------- Setup Chrome (optimized for Chromium) ----------
         chrome_options = Options()
+        chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium")
+
         chrome_options.add_argument("--headless=new")
-        chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--window-size=1920,1080")
         chrome_options.add_argument("--disable-software-rasterizer")
         chrome_options.add_argument("--disable-setuid-sandbox")
         chrome_options.add_argument("--dns-prefetch-disable")
-        chrome_options.add_argument("--single-process")
+        chrome_options.add_argument("--window-size=1920,1080")
+
 
         driver = webdriver.Chrome(options=chrome_options)
         driver.set_page_load_timeout(60)

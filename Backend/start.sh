@@ -7,9 +7,11 @@ echo "CHROME_BIN: $CHROME_BIN"
 echo "DISPLAY: $DISPLAY"
 
 echo "=== Checking Chrome binary ==="
+ls -la /usr/bin/chromium || echo "Chromium not found"
 ls -la /usr/bin/google-chrome || echo "Google Chrome not found"
 
 echo "=== Checking which commands ==="
+which chromium || echo "chromium not found"
 which google-chrome || echo "google-chrome not found"
 
 # Start virtual display for Selenium
@@ -29,5 +31,8 @@ else
 fi
 
 echo "=== Starting Flask application ==="
+# Set default port if not provided
+PORT=${PORT:-5000}
+echo "Using port: $PORT"
 # Start the Flask application
 exec gunicorn --worker-class gevent --workers 1 --bind 0.0.0.0:$PORT app:app 
