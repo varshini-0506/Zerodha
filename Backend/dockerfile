@@ -1,26 +1,25 @@
-# Use an official Python image with a specific version for stability
+# Use official slim Python image
 FROM python:3.10-slim
 
-# Set environment variables for Chrome/Chromium
-ENV CHROME_BIN=/usr/bin/google-chrome
-ENV CHROMEDRIVER_BIN=/usr/local/bin/chromedriver
-ENV PATH="/usr/local/bin:/usr/bin:${PATH}"
+# Set environment variables for Chromium
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMEDRIVER_PATH=/usr/lib/chromium/chromedriver
 ENV DISPLAY=:99
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
-# Prevent webdriver-manager from working
 ENV WDM_LOCAL=1
 ENV WDM_SSL_VERIFY=0
 ENV WDM_CACHE_PATH=/tmp/disabled
-ENV SELENIUM_DRIVER_PATH=/usr/local/bin/chromedriver
+ENV SELENIUM_DRIVER_PATH=/usr/lib/chromium/chromedriver
 
-# Install system dependencies and Chrome with multiple fallback options
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    chromium-driver \
     wget \
-    gnupg \
-    unzip \
     curl \
+    unzip \
+    gnupg \
     xvfb \
     fonts-liberation \
     libasound2 \
@@ -40,90 +39,36 @@ RUN apt-get update && \
     libxtst6 \
     xdg-utils \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Google Chrome with fallback to Chromium
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - && \
-    echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
-    apt-get update && \
-    apt-get install -y google-chrome-stable && \
-    rm -rf /var/lib/apt/lists/* || \
-    (echo "Google Chrome installation failed, trying Chromium..." && \
-     apt-get update && \
-     apt-get install -y chromium chromium-driver && \
-     ln -sf /usr/bin/chromium /usr/bin/google-chrome && \
-     rm -rf /var/lib/apt/lists/*)
+# Link chromium binary for compatibility
+RUN ln -sf /usr/bin/chromium /usr/bin/google-chrome && \
+    ln -sf /usr/lib/chromium/chromedriver /usr/local/bin/chromedriver
 
-# Install ChromeDriver directly in Dockerfile with detailed logging
-RUN echo "=== Starting ChromeDriver Installation ===" && \
-    echo "1. Checking Chrome installation..." && \
-    CHROME_VERSION=$(google-chrome --version | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | head -1) && \
-    echo "✅ Chrome version: $CHROME_VERSION" && \
-    echo "2. Getting ChromeDriver version..." && \
-    curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION" > /tmp/chromedriver_version || \
-    (echo "Version-specific failed, trying latest..." && \
-     curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" > /tmp/chromedriver_version) && \
-    CHROMEDRIVER_VERSION=$(cat /tmp/chromedriver_version) && \
-    echo "✅ ChromeDriver version: $CHROMEDRIVER_VERSION" && \
-    echo "3. Downloading ChromeDriver..." && \
-    curl -s -L "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" -o /tmp/chromedriver.zip && \
-    echo "✅ Download completed" && \
-    echo "4. Extracting ChromeDriver..." && \
-    unzip -q /tmp/chromedriver.zip -d /tmp/ && \
-    echo "✅ Extraction completed" && \
-    echo "5. Installing ChromeDriver..." && \
-    mv /tmp/chromedriver /usr/local/bin/chromedriver && \
-    chmod +x /usr/local/bin/chromedriver && \
-    ln -sf /usr/local/bin/chromedriver /usr/bin/chromedriver && \
-    echo "✅ Installation completed" && \
-    echo "6. Verifying installation..." && \
-    /usr/local/bin/chromedriver --version && \
-    echo "✅ Verification successful" && \
-    echo "7. Cleaning up..." && \
-    rm -f /tmp/chromedriver.zip /tmp/chromedriver_version && \
-    echo "✅ ChromeDriver installation completed successfully"
-
-# Remove any existing webdriver-manager cache and set environment variables
-RUN rm -rf /root/.cache/selenium /root/.wdm /tmp/.wdm 2>/dev/null || true && \
-    echo "Removed webdriver-manager cache directories"
-
-# Verify Chrome and ChromeDriver installation
-RUN echo "=== Final Verification ===" && \
-    echo "Chrome:" && \
-    (google-chrome --version || chromium --version || echo "Chrome installation verification failed") && \
-    echo "ChromeDriver:" && \
-    (/usr/local/bin/chromedriver --version || echo "ChromeDriver installation verification failed") && \
-    echo "ChromeDriver location:" && \
-    ls -la /usr/local/bin/chromedriver /usr/bin/chromedriver 2>/dev/null || echo "ChromeDriver files not found" && \
-    echo "=== Verification Complete ==="
-
-# Set work directory
+# Set working directory
 WORKDIR /app
 
-# Copy requirements first for better caching
+# Copy requirements and install
 COPY requirements.txt .
-
-# Install Python dependencies with retry mechanism
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of your code
+# Copy app code
 COPY . .
 
 # Make startup script executable
 RUN chmod +x start.sh
 
-# Create a non-root user for security
+# Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Expose the port Flask runs on
+# Expose port
 EXPOSE 5000
 
-# Health check
+# Optional health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:5000/api/market_status || exit 1
 
-# Start the Flask app
+# Start app
 CMD ["./start.sh"]

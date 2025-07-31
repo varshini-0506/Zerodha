@@ -655,10 +655,9 @@ def refresh_zerodha_token():
         SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
         SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 
-        # Check TOTP secret
-        pyotp.TOTP(TOTP_SECRET).now()
+        pyotp.TOTP(TOTP_SECRET).now()  # Validate TOTP secret early
 
-        # ---------- Network Debug ----------
+        # Network diagnostics
         debug_msg = []
         try:
             ip = socket.gethostbyname("kite.zerodha.com")
@@ -671,30 +670,15 @@ def refresh_zerodha_token():
             debug_msg.append(f"Requests status: {r.status_code}")
         except Exception as e:
             debug_msg.append(f"Requests FAIL: {e}")
-
         result["network_check"] = " | ".join(debug_msg)
 
-        # ---------- Setup Supabase ----------
+        # Supabase client
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-        # ---------- Setup Chrome (optimized for Railway) ----------
+        # Chrome Options
         chrome_options = Options()
-        
-        # Try to find Chrome binary
-        chrome_bin = os.getenv("CHROME_BIN")
-        if not chrome_bin:
-            for path in ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"]:
-                if os.path.exists(path):
-                    chrome_bin = path
-                    break
-        
-        if chrome_bin:
-            chrome_options.binary_location = chrome_bin
-            print(f"Using Chrome binary: {chrome_bin}")
-        else:
-            print("No Chrome binary found, using default")
-
-        chrome_options.add_argument("--headless=new")
+        chrome_options.binary_location = "/usr/bin/chromium"
+        chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-dev-shm-usage")
@@ -703,95 +687,26 @@ def refresh_zerodha_token():
         chrome_options.add_argument("--dns-prefetch-disable")
         chrome_options.add_argument("--window-size=1920,1080")
 
+        # Use static path to Chromium's driver
+        chromedriver_path = "/usr/lib/chromium/chromedriver"
+        service = Service(executable_path=chromedriver_path)
 
-        # Force use of system ChromeDriver only
-        driver = None
-        
-        # Set environment variables to completely disable webdriver-manager
-        os.environ['WDM_LOCAL'] = '1'
-        os.environ['WDM_SSL_VERIFY'] = '0'
-        os.environ['WDM_CACHE_PATH'] = '/tmp/disabled'
-        os.environ['SELENIUM_DRIVER_PATH'] = '/usr/local/bin/chromedriver'
-        
-        # Remove any existing cache directories
-        import shutil
-        cache_dirs = ['/root/.cache/selenium', '/root/.wdm', '/tmp/.wdm']
-        for cache_dir in cache_dirs:
-            if os.path.exists(cache_dir):
-                try:
-                    shutil.rmtree(cache_dir)
-                    print(f"Removed cache directory: {cache_dir}")
-                except Exception as e:
-                    print(f"Could not remove {cache_dir}: {e}")
-        
-        # Try system ChromeDriver with explicit path
-        chromedriver_path = '/usr/local/bin/chromedriver'
-        if os.path.exists(chromedriver_path):
-            try:
-                print(f"Using system ChromeDriver at: {chromedriver_path}")
-                # Create service with explicit path and disable logging
-                service = Service(
-                    executable_path=chromedriver_path,
-                    log_output=os.devnull  # Disable logging to prevent cache issues
-                )
-                driver = webdriver.Chrome(service=service, options=chrome_options)
-                print(f"✅ ChromeDriver created successfully with system path")
-            except Exception as e:
-                print(f"❌ System ChromeDriver failed: {e}")
-                result["error"] = f"System ChromeDriver failed: {e}"
-                result["success"] = False
-                return jsonify(result)
-        else:
-            print(f"❌ ChromeDriver not found at: {chromedriver_path}")
-            # Check if ChromeDriver exists in other locations
-            alternative_paths = ['/usr/bin/chromedriver', '/opt/chromedriver/chromedriver']
-            found_path = None
-            
-            for alt_path in alternative_paths:
-                if os.path.exists(alt_path):
-                    print(f"Found ChromeDriver at alternative location: {alt_path}")
-                    found_path = alt_path
-                    break
-            
-            if found_path:
-                try:
-                    print(f"Using ChromeDriver at: {found_path}")
-                    service = Service(
-                        executable_path=found_path,
-                        log_output=os.devnull
-                    )
-                    driver = webdriver.Chrome(service=service, options=chrome_options)
-                    print(f"✅ ChromeDriver created successfully with alternative path")
-                except Exception as e:
-                    print(f"❌ Alternative ChromeDriver failed: {e}")
-                    result["error"] = f"ChromeDriver not found and all alternatives failed: {e}"
-                    result["success"] = False
-                    return jsonify(result)
-            else:
-                print("❌ ChromeDriver not found in any location")
-                result["error"] = "ChromeDriver not found in any location. Please check Dockerfile installation."
-                result["success"] = False
-                return jsonify(result)
-        
-        if driver is None:
-            result["error"] = "ChromeDriver initialization failed. Token refresh unavailable."
-            result["success"] = False
-            return jsonify(result)
+        driver = webdriver.Chrome(service=service, options=chrome_options)
         driver.set_page_load_timeout(60)
         wait = WebDriverWait(driver, 40)
 
-        # ---------- Step 1: Login ----------
+        # Step 1: Go to login
         login_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={API_KEY}"
         driver.get(login_url)
 
-        # ---------- Step 2: Username & Password ----------
+        # Step 2: Username and password
         userid_field = wait.until(EC.presence_of_element_located((By.ID, "userid")))
         userid_field.clear()
         userid_field.send_keys(Z_USERNAME)
         driver.find_element(By.ID, "password").send_keys(Z_PASSWORD)
         driver.find_element(By.XPATH, "//button[@type='submit']").click()
 
-        # ---------- Step 3: TOTP ----------
+        # Step 3: TOTP page
         try:
             wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "form.twofa-form input#userid")))
             totp_field = driver.find_element(By.CSS_SELECTOR, "form.twofa-form input#userid")
@@ -800,12 +715,11 @@ def refresh_zerodha_token():
             totp_field.send_keys(totp)
             driver.find_element(By.CSS_SELECTOR, "form.twofa-form button[type='submit']").click()
         except TimeoutException:
-            screenshot_bytes = driver.get_screenshot_as_png()
-            result["debug_screenshot"] = base64.b64encode(screenshot_bytes).decode()
+            result["debug_screenshot"] = base64.b64encode(driver.get_screenshot_as_png()).decode()
             result["debug_html"] = driver.page_source
-            raise TimeoutException("TOTP form did not load (possibly wrong flow).")
+            raise TimeoutException("TOTP form did not load.")
 
-        # ---------- Step 4: Request Token ----------
+        # Step 4: Wait for redirect with request_token
         wait.until(lambda d: "request_token" in d.current_url)
         redirected_url = driver.current_url
         parsed = urlparse(redirected_url)
@@ -813,18 +727,19 @@ def refresh_zerodha_token():
         if not request_token:
             raise Exception("Request token not found in redirected URL.")
 
-        # ---------- Step 5: Access Token ----------
+        # Step 5: Get access token from Kite
         kite = KiteConnect(api_key=API_KEY)
         data = kite.generate_session(request_token, api_secret=API_SECRET)
         access_token = data["access_token"]
 
-        # ---------- Step 6: Store in Supabase ----------
+        # Step 6: Save to Supabase
         response = supabase.table("api_tokens").upsert({
             "service": "zerodha",
             "access_token": access_token,
             "created_at": datetime.now().isoformat()
         }, on_conflict="service").execute()
 
+        # Final result
         result["success"] = True
         result["access_token"] = access_token
         result["request_token"] = request_token
@@ -835,8 +750,7 @@ def refresh_zerodha_token():
     except Exception as e:
         if driver:
             try:
-                screenshot_bytes = driver.get_screenshot_as_png()
-                result["debug_screenshot"] = base64.b64encode(screenshot_bytes).decode()
+                result["debug_screenshot"] = base64.b64encode(driver.get_screenshot_as_png()).decode()
                 result["debug_html"] = driver.page_source
             except:
                 pass
