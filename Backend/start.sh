@@ -26,7 +26,10 @@ fi
 echo "=== Chrome binary path: $CHROME_BIN ==="
 
 echo "=== Checking ChromeDriver ==="
-if [ -f "/usr/local/bin/chromedriver" ]; then
+if [ -f "/usr/lib/chromium/chromedriver" ]; then
+    echo "✅ ChromeDriver found: $(/usr/lib/chromium/chromedriver --version)"
+    export CHROMEDRIVER_BIN=/usr/lib/chromium/chromedriver
+elif [ -f "/usr/local/bin/chromedriver" ]; then
     echo "✅ ChromeDriver found: $(/usr/local/bin/chromedriver --version)"
     export CHROMEDRIVER_BIN=/usr/local/bin/chromedriver
 elif [ -f "/usr/bin/chromedriver" ]; then
@@ -40,7 +43,10 @@ echo "=== ChromeDriver path: $CHROMEDRIVER_BIN ==="
 
 # Check ChromeDriver installation status
 echo "=== Checking ChromeDriver installation ==="
-if [ -f "/usr/local/bin/chromedriver" ]; then
+if [ -f "/usr/lib/chromium/chromedriver" ]; then
+    echo "✅ ChromeDriver found at /usr/lib/chromium/chromedriver"
+    /usr/lib/chromium/chromedriver --version
+elif [ -f "/usr/local/bin/chromedriver" ]; then
     echo "✅ ChromeDriver found at /usr/local/bin/chromedriver"
     /usr/local/bin/chromedriver --version
 elif [ -f "/usr/bin/chromedriver" ]; then
@@ -48,6 +54,8 @@ elif [ -f "/usr/bin/chromedriver" ]; then
     /usr/bin/chromedriver --version
 else
     echo "❌ ChromeDriver not found in expected locations"
+    echo "Available files in /usr/lib/chromium:"
+    ls -la /usr/lib/chromium/ | grep -i chrome || echo "No Chrome files found"
     echo "Available files in /usr/local/bin:"
     ls -la /usr/local/bin/ | grep -i chrome || echo "No Chrome files found"
     echo "Available files in /usr/bin:"

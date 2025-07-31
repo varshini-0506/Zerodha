@@ -711,17 +711,40 @@ def refresh_zerodha_token():
         chrome_options.add_argument("--dns-prefetch-disable")
         chrome_options.add_argument("--window-size=1920,1080")
 
-        # Use static path to Chromium's driver
-        chromedriver_path = "/usr/lib/chromium/chromedriver"
+        # Try multiple ChromeDriver paths
+        chromedriver_paths = [
+            "/usr/lib/chromium/chromedriver",  # Primary Chromium location
+            "/usr/local/bin/chromedriver",     # Symlink location
+            "/usr/bin/chromedriver",           # Alternative location
+            os.getenv('CHROMEDRIVER_PATH'),    # Environment variable
+            os.getenv('SELENIUM_DRIVER_PATH')  # Selenium environment variable
+        ]
         
-        # Validate ChromeDriver exists
-        if not os.path.exists(chromedriver_path):
-            result["error"] = f"ChromeDriver not found at {chromedriver_path}"
+        driver = None
+        chromedriver_path = None
+        
+        for path in chromedriver_paths:
+            if path and os.path.exists(path):
+                try:
+                    print(f"Trying ChromeDriver at: {path}")
+                    service = Service(executable_path=path)
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                    chromedriver_path = path
+                    print(f"✅ ChromeDriver created successfully with path: {path}")
+                    break
+                except Exception as e:
+                    print(f"❌ ChromeDriver failed at {path}: {e}")
+                    continue
+        
+        if driver is None:
+            print("❌ ChromeDriver not found in any location")
+            print("Available ChromeDriver locations:")
+            for path in chromedriver_paths:
+                if path:
+                    print(f"  - {path}: {'✅ EXISTS' if os.path.exists(path) else '❌ NOT FOUND'}")
+            result["error"] = "ChromeDriver not found in any location. Please check Dockerfile installation."
             result["success"] = False
             return jsonify(result)
-        
-        service = Service(executable_path=chromedriver_path)
-        driver = webdriver.Chrome(service=service, options=chrome_options)
         driver.set_page_load_timeout(60)
         wait = WebDriverWait(driver, 40)
 

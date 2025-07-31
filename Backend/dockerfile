@@ -41,9 +41,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Link chromium binary for compatibility
+# Link chromium binary for compatibility and verify ChromeDriver installation
 RUN ln -sf /usr/bin/chromium /usr/bin/google-chrome && \
-    ln -sf /usr/lib/chromium/chromedriver /usr/local/bin/chromedriver
+    echo "=== ChromeDriver Installation Verification ===" && \
+    echo "Checking /usr/lib/chromium/chromedriver:" && \
+    ls -la /usr/lib/chromium/chromedriver 2>/dev/null || echo "Not found in /usr/lib/chromium/" && \
+    echo "Checking /usr/bin/chromedriver:" && \
+    ls -la /usr/bin/chromedriver 2>/dev/null || echo "Not found in /usr/bin/" && \
+    echo "Creating symlinks..." && \
+    ln -sf /usr/bin/chromedriver /usr/local/bin/chromedriver 2>/dev/null || echo "Could not create symlink" && \
+    echo "Final ChromeDriver locations:" && \
+    find /usr -name "*chromedriver*" 2>/dev/null || echo "No chromedriver found in /usr"
 
 # Set working directory
 WORKDIR /app
