@@ -704,7 +704,7 @@ def refresh_zerodha_token():
         chrome_options.add_argument("--window-size=1920,1080")
 
 
-        # Try multiple ChromeDriver approaches
+        # Try multiple ChromeDriver approaches with explicit path setting
         driver = None
         chromedriver_paths = [
             '/usr/local/bin/chromedriver',
@@ -712,12 +712,16 @@ def refresh_zerodha_token():
             os.getenv('CHROMEDRIVER_BIN')
         ]
         
+        # Set environment variables to prevent webdriver-manager auto-download
+        os.environ['WDM_LOCAL'] = '1'
+        os.environ['WDM_SSL_VERIFY'] = '0'
+        
         # Try system ChromeDriver first
         for path in chromedriver_paths:
             if path and os.path.exists(path):
                 try:
                     print(f"Trying ChromeDriver at: {path}")
-                    service = Service(path)
+                    service = Service(executable_path=path)
                     driver = webdriver.Chrome(service=service, options=chrome_options)
                     print(f"✅ ChromeDriver created successfully with: {path}")
                     break
@@ -725,21 +729,27 @@ def refresh_zerodha_token():
                     print(f"❌ ChromeDriver failed at {path}: {e}")
                     continue
         
-        # If system ChromeDriver failed, try without service (let Selenium find it)
+        # If system ChromeDriver failed, try with PATH-based approach
         if driver is None:
             try:
-                print("Trying without explicit service (let Selenium auto-detect)...")
+                print("Trying PATH-based ChromeDriver detection...")
+                # Ensure ChromeDriver is in PATH
+                os.environ['PATH'] = '/usr/local/bin:/usr/bin:' + os.environ.get('PATH', '')
                 driver = webdriver.Chrome(options=chrome_options)
-                print("✅ ChromeDriver created without service")
+                print("✅ ChromeDriver created with PATH detection")
             except Exception as e:
-                print(f"❌ Auto-detection failed: {e}")
+                print(f"❌ PATH detection failed: {e}")
                 # All attempts failed
                 print(f"❌ All ChromeDriver attempts failed")
                 print(f"   System ChromeDriver errors: {e}")
-                raise Exception(f"Unable to create ChromeDriver. All system attempts failed: {e}")
+                result["error"] = f"ChromeDriver initialization failed. All attempts failed: {e}"
+                result["success"] = False
+                return jsonify(result)
         
         if driver is None:
-            raise Exception("Failed to create ChromeDriver with any method")
+            result["error"] = "ChromeDriver initialization failed. Token refresh unavailable."
+            result["success"] = False
+            return jsonify(result)
         driver.set_page_load_timeout(60)
         wait = WebDriverWait(driver, 40)
 
