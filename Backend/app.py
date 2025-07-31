@@ -704,47 +704,48 @@ def refresh_zerodha_token():
         chrome_options.add_argument("--window-size=1920,1080")
 
 
-        # Try multiple ChromeDriver approaches with explicit path setting
+        # Force use of system ChromeDriver only
         driver = None
-        chromedriver_paths = [
-            '/usr/local/bin/chromedriver',
-            '/usr/bin/chromedriver',
-            os.getenv('CHROMEDRIVER_BIN')
-        ]
         
-        # Set environment variables to prevent webdriver-manager auto-download
+        # Set environment variables to completely disable webdriver-manager
         os.environ['WDM_LOCAL'] = '1'
         os.environ['WDM_SSL_VERIFY'] = '0'
+        os.environ['WDM_CACHE_PATH'] = '/tmp/disabled'
+        os.environ['SELENIUM_DRIVER_PATH'] = '/usr/local/bin/chromedriver'
         
-        # Try system ChromeDriver first
-        for path in chromedriver_paths:
-            if path and os.path.exists(path):
+        # Remove any existing cache directories
+        import shutil
+        cache_dirs = ['/root/.cache/selenium', '/root/.wdm', '/tmp/.wdm']
+        for cache_dir in cache_dirs:
+            if os.path.exists(cache_dir):
                 try:
-                    print(f"Trying ChromeDriver at: {path}")
-                    service = Service(executable_path=path)
-                    driver = webdriver.Chrome(service=service, options=chrome_options)
-                    print(f"✅ ChromeDriver created successfully with: {path}")
-                    break
+                    shutil.rmtree(cache_dir)
+                    print(f"Removed cache directory: {cache_dir}")
                 except Exception as e:
-                    print(f"❌ ChromeDriver failed at {path}: {e}")
-                    continue
+                    print(f"Could not remove {cache_dir}: {e}")
         
-        # If system ChromeDriver failed, try with PATH-based approach
-        if driver is None:
+        # Try system ChromeDriver with explicit path
+        chromedriver_path = '/usr/local/bin/chromedriver'
+        if os.path.exists(chromedriver_path):
             try:
-                print("Trying PATH-based ChromeDriver detection...")
-                # Ensure ChromeDriver is in PATH
-                os.environ['PATH'] = '/usr/local/bin:/usr/bin:' + os.environ.get('PATH', '')
-                driver = webdriver.Chrome(options=chrome_options)
-                print("✅ ChromeDriver created with PATH detection")
+                print(f"Using system ChromeDriver at: {chromedriver_path}")
+                # Create service with explicit path and disable logging
+                service = Service(
+                    executable_path=chromedriver_path,
+                    log_output=os.devnull  # Disable logging to prevent cache issues
+                )
+                driver = webdriver.Chrome(service=service, options=chrome_options)
+                print(f"✅ ChromeDriver created successfully with system path")
             except Exception as e:
-                print(f"❌ PATH detection failed: {e}")
-                # All attempts failed
-                print(f"❌ All ChromeDriver attempts failed")
-                print(f"   System ChromeDriver errors: {e}")
-                result["error"] = f"ChromeDriver initialization failed. All attempts failed: {e}"
+                print(f"❌ System ChromeDriver failed: {e}")
+                result["error"] = f"System ChromeDriver failed: {e}"
                 result["success"] = False
                 return jsonify(result)
+        else:
+            print(f"❌ ChromeDriver not found at: {chromedriver_path}")
+            result["error"] = f"ChromeDriver not found at {chromedriver_path}"
+            result["success"] = False
+            return jsonify(result)
         
         if driver is None:
             result["error"] = "ChromeDriver initialization failed. Token refresh unavailable."

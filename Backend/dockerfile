@@ -8,6 +8,11 @@ ENV PATH="/usr/local/bin:/usr/bin:${PATH}"
 ENV DISPLAY=:99
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
+# Prevent webdriver-manager from working
+ENV WDM_LOCAL=1
+ENV WDM_SSL_VERIFY=0
+ENV WDM_CACHE_PATH=/tmp/disabled
+ENV SELENIUM_DRIVER_PATH=/usr/local/bin/chromedriver
 
 # Install system dependencies and Chrome with multiple fallback options
 RUN apt-get update && \
@@ -63,6 +68,10 @@ RUN CHROME_VERSION=$(google-chrome --version | grep -oE "[0-9]+\.[0-9]+\.[0-9]+"
     ln -sf /usr/local/bin/chromedriver /usr/bin/chromedriver && \
     rm /tmp/chromedriver.zip /tmp/chromedriver_version && \
     echo "ChromeDriver installed and linked"
+
+# Remove any existing webdriver-manager cache and set environment variables
+RUN rm -rf /root/.cache/selenium /root/.wdm /tmp/.wdm 2>/dev/null || true && \
+    echo "Removed webdriver-manager cache directories"
 
 # Verify Chrome and ChromeDriver installation
 RUN google-chrome --version || chromium --version || echo "Chrome installation verification failed"
