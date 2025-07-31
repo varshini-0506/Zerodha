@@ -38,13 +38,20 @@ fi
 
 echo "=== ChromeDriver path: $CHROMEDRIVER_BIN ==="
 
-# Check and install ChromeDriver if needed
+# Check ChromeDriver installation status
 echo "=== Checking ChromeDriver installation ==="
-python check_chromedriver_install.py
-if [ $? -ne 0 ]; then
-    echo "❌ ChromeDriver installation check failed"
+if [ -f "/usr/local/bin/chromedriver" ]; then
+    echo "✅ ChromeDriver found at /usr/local/bin/chromedriver"
+    /usr/local/bin/chromedriver --version
+elif [ -f "/usr/bin/chromedriver" ]; then
+    echo "✅ ChromeDriver found at /usr/bin/chromedriver"
+    /usr/bin/chromedriver --version
 else
-    echo "✅ ChromeDriver installation check completed"
+    echo "❌ ChromeDriver not found in expected locations"
+    echo "Available files in /usr/local/bin:"
+    ls -la /usr/local/bin/ | grep -i chrome || echo "No Chrome files found"
+    echo "Available files in /usr/bin:"
+    ls -la /usr/bin/ | grep -i chrome || echo "No Chrome files found"
 fi
 
 # Start virtual display for Selenium

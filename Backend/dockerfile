@@ -67,7 +67,16 @@ RUN CHROME_VERSION=$(google-chrome --version | grep -oE "[0-9]+\.[0-9]+\.[0-9]+"
     chmod +x /usr/local/bin/chromedriver && \
     ln -sf /usr/local/bin/chromedriver /usr/bin/chromedriver && \
     rm /tmp/chromedriver.zip /tmp/chromedriver_version && \
-    echo "ChromeDriver installed and linked"
+    echo "ChromeDriver installed and linked" || \
+    (echo "ChromeDriver installation failed, trying alternative method..." && \
+     wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" -O /tmp/chromedriver_version && \
+     CHROMEDRIVER_VERSION=$(cat /tmp/chromedriver_version) && \
+     wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" -O /tmp/chromedriver.zip && \
+     unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
+     chmod +x /usr/local/bin/chromedriver && \
+     ln -sf /usr/local/bin/chromedriver /usr/bin/chromedriver && \
+     rm /tmp/chromedriver.zip /tmp/chromedriver_version && \
+     echo "ChromeDriver installed with alternative method")
 
 # Remove any existing webdriver-manager cache and set environment variables
 RUN rm -rf /root/.cache/selenium /root/.wdm /tmp/.wdm 2>/dev/null || true && \

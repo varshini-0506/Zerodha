@@ -743,34 +743,33 @@ def refresh_zerodha_token():
                 return jsonify(result)
         else:
             print(f"❌ ChromeDriver not found at: {chromedriver_path}")
-            print("Attempting to install ChromeDriver...")
+            # Check if ChromeDriver exists in other locations
+            alternative_paths = ['/usr/bin/chromedriver', '/opt/chromedriver/chromedriver']
+            found_path = None
             
-            # Try to install ChromeDriver
-            try:
-                import subprocess
-                result_install = subprocess.run(['python', 'check_chromedriver_install.py'], 
-                                              capture_output=True, text=True, timeout=60)
-                print(f"Installation output: {result_install.stdout}")
-                if result_install.stderr:
-                    print(f"Installation errors: {result_install.stderr}")
-                
-                if result_install.returncode == 0 and os.path.exists(chromedriver_path):
-                    print("✅ ChromeDriver installed successfully, retrying...")
-                    # Retry with the newly installed ChromeDriver
+            for alt_path in alternative_paths:
+                if os.path.exists(alt_path):
+                    print(f"Found ChromeDriver at alternative location: {alt_path}")
+                    found_path = alt_path
+                    break
+            
+            if found_path:
+                try:
+                    print(f"Using ChromeDriver at: {found_path}")
                     service = Service(
-                        executable_path=chromedriver_path,
+                        executable_path=found_path,
                         log_output=os.devnull
                     )
                     driver = webdriver.Chrome(service=service, options=chrome_options)
-                    print(f"✅ ChromeDriver created successfully after installation")
-                else:
-                    print("❌ ChromeDriver installation failed")
-                    result["error"] = f"ChromeDriver not found and installation failed"
+                    print(f"✅ ChromeDriver created successfully with alternative path")
+                except Exception as e:
+                    print(f"❌ Alternative ChromeDriver failed: {e}")
+                    result["error"] = f"ChromeDriver not found and all alternatives failed: {e}"
                     result["success"] = False
                     return jsonify(result)
-            except Exception as e:
-                print(f"❌ Error during ChromeDriver installation: {e}")
-                result["error"] = f"ChromeDriver installation error: {e}"
+            else:
+                print("❌ ChromeDriver not found in any location")
+                result["error"] = "ChromeDriver not found in any location. Please check Dockerfile installation."
                 result["success"] = False
                 return jsonify(result)
         
