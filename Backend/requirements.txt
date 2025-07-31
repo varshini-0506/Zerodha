@@ -19,7 +19,6 @@ pyotp>=2.8.0
 
 # Web Scraping and Browser Automation
 selenium>=4.15.0
-webdriver-manager>=4.0.0
 
 # HTTP and Network Requests
 requests>=2.31.0

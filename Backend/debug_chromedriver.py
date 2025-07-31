@@ -105,7 +105,7 @@ def check_selenium_webdriver():
         
         # Try different ChromeDriver approaches
         approaches = [
-            ("System ChromeDriver", lambda: webdriver.Chrome(options=chrome_options)),
+            ("Auto-detection (no service)", lambda: webdriver.Chrome(options=chrome_options)),
             ("Service with /usr/local/bin/chromedriver", lambda: webdriver.Chrome(service=Service('/usr/local/bin/chromedriver'), options=chrome_options)),
             ("Service with /usr/bin/chromedriver", lambda: webdriver.Chrome(service=Service('/usr/bin/chromedriver'), options=chrome_options)),
         ]

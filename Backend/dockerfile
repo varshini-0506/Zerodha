@@ -4,7 +4,7 @@ FROM python:3.10-slim
 # Set environment variables for Chrome/Chromium
 ENV CHROME_BIN=/usr/bin/google-chrome
 ENV CHROMEDRIVER_BIN=/usr/local/bin/chromedriver
-ENV PATH="/usr/local/bin:${PATH}"
+ENV PATH="/usr/local/bin:/usr/bin:${PATH}"
 ENV DISPLAY=:99
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive

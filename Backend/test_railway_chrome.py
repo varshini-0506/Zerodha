@@ -138,16 +138,13 @@ def test_webdriver_creation():
             print("✅ WebDriver created with system ChromeDriver")
         except Exception as e:
             print(f"System ChromeDriver failed: {e}")
-            # Fallback to webdriver-manager
+            # Fallback to auto-detection
             try:
-                service = Service(ChromeDriverManager().install())
-                driver = webdriver.Chrome(service=service, options=chrome_options)
-                print("✅ WebDriver created with webdriver-manager")
-            except Exception as e2:
-                print(f"webdriver-manager also failed: {e2}")
-                # Last resort - try without service
                 driver = webdriver.Chrome(options=chrome_options)
-                print("✅ WebDriver created without explicit service")
+                print("✅ WebDriver created with auto-detection")
+            except Exception as e2:
+                print(f"Auto-detection also failed: {e2}")
+                raise Exception(f"All WebDriver creation methods failed: {e2}")
         
         # Test basic navigation
         driver.get("https://www.google.com")

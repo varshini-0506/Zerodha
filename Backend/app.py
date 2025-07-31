@@ -726,24 +726,18 @@ def refresh_zerodha_token():
                     print(f"❌ ChromeDriver failed at {path}: {e}")
                     continue
         
-        # If system ChromeDriver failed, try webdriver-manager
+        # If system ChromeDriver failed, try without service (let Selenium find it)
         if driver is None:
             try:
-                print("Trying webdriver-manager...")
-                from webdriver_manager.chrome import ChromeDriverManager
-                service = Service(ChromeDriverManager().install())
-                driver = webdriver.Chrome(service=service, options=chrome_options)
-                print("✅ ChromeDriver created with webdriver-manager")
+                print("Trying without explicit service (let Selenium auto-detect)...")
+                driver = webdriver.Chrome(options=chrome_options)
+                print("✅ ChromeDriver created without service")
             except Exception as e:
-                print(f"❌ webdriver-manager failed: {e}")
-                # Last resort - try without service
-                try:
-                    print("Trying without explicit service...")
-                    driver = webdriver.Chrome(options=chrome_options)
-                    print("✅ ChromeDriver created without service")
-                except Exception as e2:
-                    print(f"❌ All ChromeDriver attempts failed: {e2}")
-                    raise Exception(f"Unable to create ChromeDriver. Last error: {e2}")
+                print(f"❌ Auto-detection failed: {e}")
+                # All attempts failed
+                print(f"❌ All ChromeDriver attempts failed")
+                print(f"   System ChromeDriver errors: {e}")
+                raise Exception(f"Unable to create ChromeDriver. All system attempts failed: {e}")
         
         if driver is None:
             raise Exception("Failed to create ChromeDriver with any method")
