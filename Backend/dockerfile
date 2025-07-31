@@ -41,6 +41,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Verify ChromeDriver installation immediately after package install
+RUN echo "=== Immediate ChromeDriver Verification ===" && \
+    echo "Checking if chromium-driver package installed ChromeDriver:" && \
+    dpkg -l | grep chromium && \
+    echo "Searching for chromedriver files:" && \
+    find /usr -name "*chromedriver*" 2>/dev/null || echo "No chromedriver found" && \
+    echo "Checking specific locations:" && \
+    ls -la /usr/lib/chromium/chromedriver 2>/dev/null || echo "Not in /usr/lib/chromium/" && \
+    ls -la /usr/bin/chromedriver 2>/dev/null || echo "Not in /usr/bin/" && \
+    echo "Package installation verification complete"
+
 # Link chromium binary for compatibility and verify ChromeDriver installation
 RUN ln -sf /usr/bin/chromium /usr/bin/google-chrome && \
     echo "=== ChromeDriver Installation Verification ===" && \
