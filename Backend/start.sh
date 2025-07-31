@@ -45,6 +45,15 @@ Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
 # Wait a moment for Xvfb to start
 sleep 2
 
+# Run ChromeDriver debug test
+echo "=== Running ChromeDriver debug test ==="
+python debug_chromedriver.py
+if [ $? -ne 0 ]; then
+    echo "❌ ChromeDriver debug test failed. Starting Flask app anyway..."
+else
+    echo "✅ ChromeDriver debug test passed!"
+fi
+
 # Run Railway Chrome test to verify setup
 echo "=== Running Railway Chrome test ==="
 python test_railway_chrome.py

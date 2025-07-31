@@ -60,7 +60,9 @@ RUN CHROME_VERSION=$(google-chrome --version | grep -oE "[0-9]+\.[0-9]+\.[0-9]+"
     wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" -O /tmp/chromedriver.zip && \
     unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
     chmod +x /usr/local/bin/chromedriver && \
-    rm /tmp/chromedriver.zip /tmp/chromedriver_version
+    ln -sf /usr/local/bin/chromedriver /usr/bin/chromedriver && \
+    rm /tmp/chromedriver.zip /tmp/chromedriver_version && \
+    echo "ChromeDriver installed and linked"
 
 # Verify Chrome and ChromeDriver installation
 RUN google-chrome --version || chromium --version || echo "Chrome installation verification failed"

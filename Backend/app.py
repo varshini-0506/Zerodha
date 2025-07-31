@@ -705,9 +705,48 @@ def refresh_zerodha_token():
         chrome_options.add_argument("--window-size=1920,1080")
 
 
-        # Use system ChromeDriver instead of webdriver-manager
-        service = Service('/usr/local/bin/chromedriver')
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        # Try multiple ChromeDriver approaches
+        driver = None
+        chromedriver_paths = [
+            '/usr/local/bin/chromedriver',
+            '/usr/bin/chromedriver',
+            os.getenv('CHROMEDRIVER_BIN')
+        ]
+        
+        # Try system ChromeDriver first
+        for path in chromedriver_paths:
+            if path and os.path.exists(path):
+                try:
+                    print(f"Trying ChromeDriver at: {path}")
+                    service = Service(path)
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                    print(f"✅ ChromeDriver created successfully with: {path}")
+                    break
+                except Exception as e:
+                    print(f"❌ ChromeDriver failed at {path}: {e}")
+                    continue
+        
+        # If system ChromeDriver failed, try webdriver-manager
+        if driver is None:
+            try:
+                print("Trying webdriver-manager...")
+                from webdriver_manager.chrome import ChromeDriverManager
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=chrome_options)
+                print("✅ ChromeDriver created with webdriver-manager")
+            except Exception as e:
+                print(f"❌ webdriver-manager failed: {e}")
+                # Last resort - try without service
+                try:
+                    print("Trying without explicit service...")
+                    driver = webdriver.Chrome(options=chrome_options)
+                    print("✅ ChromeDriver created without service")
+                except Exception as e2:
+                    print(f"❌ All ChromeDriver attempts failed: {e2}")
+                    raise Exception(f"Unable to create ChromeDriver. Last error: {e2}")
+        
+        if driver is None:
+            raise Exception("Failed to create ChromeDriver with any method")
         driver.set_page_load_timeout(60)
         wait = WebDriverWait(driver, 40)
 
