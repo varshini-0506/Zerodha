@@ -13,9 +13,11 @@ def test_chrome_installation():
     
     # Check environment variables
     chrome_bin = os.getenv("CHROME_BIN")
+    chromedriver_bin = os.getenv("CHROMEDRIVER_BIN")
     display = os.getenv("DISPLAY", ":99")
     
     print(f"CHROME_BIN env var: {chrome_bin}")
+    print(f"CHROMEDRIVER_BIN env var: {chromedriver_bin}")
     print(f"DISPLAY: {display}")
     
     # Try multiple Chrome binary locations
@@ -53,6 +55,32 @@ def test_chrome_installation():
                 print("No Chrome/Chromium files found")
         except Exception as e:
             print(f"Error searching for Chrome files: {e}")
+        return False
+    
+    # Test ChromeDriver
+    print("\n=== Testing ChromeDriver ===")
+    chromedriver_paths = [
+        "/usr/local/bin/chromedriver",
+        "/usr/bin/chromedriver",
+        chromedriver_bin
+    ]
+    
+    found_chromedriver = None
+    for path in chromedriver_paths:
+        if path and os.path.exists(path):
+            try:
+                result = subprocess.run([path, '--version'], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    print(f"✅ ChromeDriver found at: {path}")
+                    print(f"   Version: {result.stdout.strip()}")
+                    found_chromedriver = path
+                    break
+            except Exception as e:
+                print(f"   ❌ Error testing {path}: {e}")
+                continue
+    
+    if not found_chromedriver:
+        print("❌ No working ChromeDriver found")
         return False
     
     return True
@@ -103,16 +131,23 @@ def test_webdriver_creation():
         else:
             print("No Chrome binary found, using default")
         
-        # Try to create driver with webdriver-manager
+        # Try to create driver with system ChromeDriver first
         try:
-            service = Service(ChromeDriverManager().install())
+            service = Service('/usr/local/bin/chromedriver')
             driver = webdriver.Chrome(service=service, options=chrome_options)
-            print("✅ WebDriver created with webdriver-manager")
+            print("✅ WebDriver created with system ChromeDriver")
         except Exception as e:
-            print(f"webdriver-manager failed: {e}")
-            # Fallback to system chromedriver
-            driver = webdriver.Chrome(options=chrome_options)
-            print("✅ WebDriver created with system chromedriver")
+            print(f"System ChromeDriver failed: {e}")
+            # Fallback to webdriver-manager
+            try:
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=chrome_options)
+                print("✅ WebDriver created with webdriver-manager")
+            except Exception as e2:
+                print(f"webdriver-manager also failed: {e2}")
+                # Last resort - try without service
+                driver = webdriver.Chrome(options=chrome_options)
+                print("✅ WebDriver created without explicit service")
         
         # Test basic navigation
         driver.get("https://www.google.com")

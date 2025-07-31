@@ -704,7 +704,9 @@ def refresh_zerodha_token():
         chrome_options.add_argument("--window-size=1920,1080")
 
 
-        driver = webdriver.Chrome(options=chrome_options)
+        # Use system ChromeDriver instead of webdriver-manager
+        service = Service('/usr/local/bin/chromedriver')
+        driver = webdriver.Chrome(service=service, options=chrome_options)
         driver.set_page_load_timeout(60)
         wait = WebDriverWait(driver, 40)
 

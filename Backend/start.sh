@@ -25,6 +25,19 @@ fi
 
 echo "=== Chrome binary path: $CHROME_BIN ==="
 
+echo "=== Checking ChromeDriver ==="
+if [ -f "/usr/local/bin/chromedriver" ]; then
+    echo "✅ ChromeDriver found: $(/usr/local/bin/chromedriver --version)"
+    export CHROMEDRIVER_BIN=/usr/local/bin/chromedriver
+elif [ -f "/usr/bin/chromedriver" ]; then
+    echo "✅ ChromeDriver found: $(/usr/bin/chromedriver --version)"
+    export CHROMEDRIVER_BIN=/usr/bin/chromedriver
+else
+    echo "❌ No ChromeDriver binary found"
+fi
+
+echo "=== ChromeDriver path: $CHROMEDRIVER_BIN ==="
+
 # Start virtual display for Selenium
 echo "=== Starting virtual display ==="
 Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
