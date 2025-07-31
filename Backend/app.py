@@ -6,6 +6,7 @@ import asyncio
 import json
 import threading
 import os
+import socket
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta, time , date
 import pytz
@@ -630,7 +631,7 @@ from kiteconnect import KiteConnect
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 from supabase import create_client
-from selenium.webdriver.chrome.webdriver import WebDriver as ChromeDriver
+# Removed ChromeDriver import - using webdriver.Chrome instead
 
 @app.route("/api/refresh_zerodha_token", methods=["POST"])
 def refresh_zerodha_token():
@@ -647,7 +648,7 @@ def refresh_zerodha_token():
 
     driver = None
     try:
-        # Load secrets
+        # Load and validate secrets
         Z_USERNAME = os.getenv("KITE_USERNAME", "").strip()
         Z_PASSWORD = os.getenv("KITE_PASSWORD", "").strip()
         TOTP_SECRET = os.getenv("TOTP_SECRET", "").strip()
@@ -656,7 +657,28 @@ def refresh_zerodha_token():
         SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
         SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 
-        pyotp.TOTP(TOTP_SECRET).now()  # Validate TOTP secret early
+        # Validate all required environment variables
+        missing_vars = []
+        if not Z_USERNAME: missing_vars.append("KITE_USERNAME")
+        if not Z_PASSWORD: missing_vars.append("KITE_PASSWORD")
+        if not TOTP_SECRET: missing_vars.append("TOTP_SECRET")
+        if not API_KEY: missing_vars.append("KITE_API_KEY")
+        if not API_SECRET: missing_vars.append("KITE_API_SECRET")
+        if not SUPABASE_URL: missing_vars.append("SUPABASE_URL")
+        if not SUPABASE_KEY: missing_vars.append("SUPABASE_KEY")
+
+        if missing_vars:
+            result["error"] = f"Missing required environment variables: {', '.join(missing_vars)}"
+            result["success"] = False
+            return jsonify(result)
+
+        # Validate TOTP secret early
+        try:
+            pyotp.TOTP(TOTP_SECRET).now()
+        except Exception as e:
+            result["error"] = f"Invalid TOTP_SECRET: {str(e)}"
+            result["success"] = False
+            return jsonify(result)
 
         # Network diagnostics
         debug_msg = []
@@ -690,9 +712,16 @@ def refresh_zerodha_token():
         chrome_options.add_argument("--window-size=1920,1080")
 
         # Use static path to Chromium's driver
-        service = Service(executable_path="/usr/lib/chromium/chromedriver")
-
-        driver = ChromeDriver(service=service, options=chrome_options)
+        chromedriver_path = "/usr/lib/chromium/chromedriver"
+        
+        # Validate ChromeDriver exists
+        if not os.path.exists(chromedriver_path):
+            result["error"] = f"ChromeDriver not found at {chromedriver_path}"
+            result["success"] = False
+            return jsonify(result)
+        
+        service = Service(executable_path=chromedriver_path)
+        driver = webdriver.Chrome(service=service, options=chrome_options)
         driver.set_page_load_timeout(60)
         wait = WebDriverWait(driver, 40)
 
