@@ -743,9 +743,36 @@ def refresh_zerodha_token():
                 return jsonify(result)
         else:
             print(f"❌ ChromeDriver not found at: {chromedriver_path}")
-            result["error"] = f"ChromeDriver not found at {chromedriver_path}"
-            result["success"] = False
-            return jsonify(result)
+            print("Attempting to install ChromeDriver...")
+            
+            # Try to install ChromeDriver
+            try:
+                import subprocess
+                result_install = subprocess.run(['python', 'check_chromedriver_install.py'], 
+                                              capture_output=True, text=True, timeout=60)
+                print(f"Installation output: {result_install.stdout}")
+                if result_install.stderr:
+                    print(f"Installation errors: {result_install.stderr}")
+                
+                if result_install.returncode == 0 and os.path.exists(chromedriver_path):
+                    print("✅ ChromeDriver installed successfully, retrying...")
+                    # Retry with the newly installed ChromeDriver
+                    service = Service(
+                        executable_path=chromedriver_path,
+                        log_output=os.devnull
+                    )
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                    print(f"✅ ChromeDriver created successfully after installation")
+                else:
+                    print("❌ ChromeDriver installation failed")
+                    result["error"] = f"ChromeDriver not found and installation failed"
+                    result["success"] = False
+                    return jsonify(result)
+            except Exception as e:
+                print(f"❌ Error during ChromeDriver installation: {e}")
+                result["error"] = f"ChromeDriver installation error: {e}"
+                result["success"] = False
+                return jsonify(result)
         
         if driver is None:
             result["error"] = "ChromeDriver initialization failed. Token refresh unavailable."

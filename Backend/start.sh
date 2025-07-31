@@ -38,6 +38,15 @@ fi
 
 echo "=== ChromeDriver path: $CHROMEDRIVER_BIN ==="
 
+# Check and install ChromeDriver if needed
+echo "=== Checking ChromeDriver installation ==="
+python check_chromedriver_install.py
+if [ $? -ne 0 ]; then
+    echo "❌ ChromeDriver installation check failed"
+else
+    echo "✅ ChromeDriver installation check completed"
+fi
+
 # Start virtual display for Selenium
 echo "=== Starting virtual display ==="
 Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
