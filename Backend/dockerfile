@@ -55,36 +55,48 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add
      ln -sf /usr/bin/chromium /usr/bin/google-chrome && \
      rm -rf /var/lib/apt/lists/*)
 
-# Install ChromeDriver manually for better compatibility
-RUN CHROME_VERSION=$(google-chrome --version | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | head -1) && \
-    echo "Chrome version: $CHROME_VERSION" && \
-    wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION" -O /tmp/chromedriver_version || \
-    wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" -O /tmp/chromedriver_version && \
+# Install ChromeDriver directly in Dockerfile with detailed logging
+RUN echo "=== Starting ChromeDriver Installation ===" && \
+    echo "1. Checking Chrome installation..." && \
+    CHROME_VERSION=$(google-chrome --version | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | head -1) && \
+    echo "✅ Chrome version: $CHROME_VERSION" && \
+    echo "2. Getting ChromeDriver version..." && \
+    curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION" > /tmp/chromedriver_version || \
+    (echo "Version-specific failed, trying latest..." && \
+     curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" > /tmp/chromedriver_version) && \
     CHROMEDRIVER_VERSION=$(cat /tmp/chromedriver_version) && \
-    echo "ChromeDriver version: $CHROMEDRIVER_VERSION" && \
-    wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" -O /tmp/chromedriver.zip && \
-    unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
+    echo "✅ ChromeDriver version: $CHROMEDRIVER_VERSION" && \
+    echo "3. Downloading ChromeDriver..." && \
+    curl -s -L "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" -o /tmp/chromedriver.zip && \
+    echo "✅ Download completed" && \
+    echo "4. Extracting ChromeDriver..." && \
+    unzip -q /tmp/chromedriver.zip -d /tmp/ && \
+    echo "✅ Extraction completed" && \
+    echo "5. Installing ChromeDriver..." && \
+    mv /tmp/chromedriver /usr/local/bin/chromedriver && \
     chmod +x /usr/local/bin/chromedriver && \
     ln -sf /usr/local/bin/chromedriver /usr/bin/chromedriver && \
-    rm /tmp/chromedriver.zip /tmp/chromedriver_version && \
-    echo "ChromeDriver installed and linked" || \
-    (echo "ChromeDriver installation failed, trying alternative method..." && \
-     wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" -O /tmp/chromedriver_version && \
-     CHROMEDRIVER_VERSION=$(cat /tmp/chromedriver_version) && \
-     wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" -O /tmp/chromedriver.zip && \
-     unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
-     chmod +x /usr/local/bin/chromedriver && \
-     ln -sf /usr/local/bin/chromedriver /usr/bin/chromedriver && \
-     rm /tmp/chromedriver.zip /tmp/chromedriver_version && \
-     echo "ChromeDriver installed with alternative method")
+    echo "✅ Installation completed" && \
+    echo "6. Verifying installation..." && \
+    /usr/local/bin/chromedriver --version && \
+    echo "✅ Verification successful" && \
+    echo "7. Cleaning up..." && \
+    rm -f /tmp/chromedriver.zip /tmp/chromedriver_version && \
+    echo "✅ ChromeDriver installation completed successfully"
 
 # Remove any existing webdriver-manager cache and set environment variables
 RUN rm -rf /root/.cache/selenium /root/.wdm /tmp/.wdm 2>/dev/null || true && \
     echo "Removed webdriver-manager cache directories"
 
 # Verify Chrome and ChromeDriver installation
-RUN google-chrome --version || chromium --version || echo "Chrome installation verification failed"
-RUN /usr/local/bin/chromedriver --version || echo "ChromeDriver installation verification failed"
+RUN echo "=== Final Verification ===" && \
+    echo "Chrome:" && \
+    (google-chrome --version || chromium --version || echo "Chrome installation verification failed") && \
+    echo "ChromeDriver:" && \
+    (/usr/local/bin/chromedriver --version || echo "ChromeDriver installation verification failed") && \
+    echo "ChromeDriver location:" && \
+    ls -la /usr/local/bin/chromedriver /usr/bin/chromedriver 2>/dev/null || echo "ChromeDriver files not found" && \
+    echo "=== Verification Complete ==="
 
 # Set work directory
 WORKDIR /app
