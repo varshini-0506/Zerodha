@@ -630,6 +630,7 @@ from kiteconnect import KiteConnect
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 from supabase import create_client
+from selenium.webdriver.chrome.webdriver import WebDriver as ChromeDriver
 
 @app.route("/api/refresh_zerodha_token", methods=["POST"])
 def refresh_zerodha_token():
@@ -677,6 +678,7 @@ def refresh_zerodha_token():
 
         # Chrome Options
         chrome_options = Options()
+        chrome_options.set_capability("browserName", "chrome")
         chrome_options.binary_location = "/usr/bin/chromium"
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
@@ -688,10 +690,9 @@ def refresh_zerodha_token():
         chrome_options.add_argument("--window-size=1920,1080")
 
         # Use static path to Chromium's driver
-        chromedriver_path = "/usr/lib/chromium/chromedriver"
-        service = Service(executable_path=chromedriver_path)
+        service = Service(executable_path="/usr/lib/chromium/chromedriver")
 
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        driver = ChromeDriver(service=service, options=chrome_options)
         driver.set_page_load_timeout(60)
         wait = WebDriverWait(driver, 40)
 
