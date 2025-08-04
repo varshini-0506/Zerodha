@@ -850,6 +850,10 @@ def get_combined_stock_events(symbol):
     except Exception as e:
         return jsonify({"error": "Failed to fetch stock events", "details": str(e)}), 500
 
+@app.route("/health")
+def health():
+    return "OK", 200
+
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
     for tick in ticks:
