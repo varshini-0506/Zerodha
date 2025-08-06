@@ -246,6 +246,74 @@ def get_stock_detail(symbol):
         except Exception as e:
             print(f"Error fetching historical data for {symbol}: {e}")
         
+        # Convert timestamps to IST timezone
+        ist_timezone = pytz.timezone('Asia/Kolkata')
+        
+        # Convert historical data timestamps
+        if historical_data:
+            for candle in historical_data:
+                try:
+                    original_date = candle['date']
+                    
+                    if isinstance(original_date, str):
+                        # Handle string format like "Sun, 01 Jan 2023 18:30:00 GMT"
+                        if 'GMT' in original_date:
+                            gmt_dt = parsedate_to_datetime(original_date)
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                        else:
+                            # Handle ISO format
+                            gmt_dt = datetime.fromisoformat(original_date.replace('Z', '+00:00'))
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                    else:
+                        # Handle datetime object
+                        ist_dt = original_date.astimezone(ist_timezone)
+                    
+                    # Format with day name, date, time and timezone
+                    formatted_date = ist_dt.strftime('%A, %d %b %Y %H:%M:%S %Z')
+                    candle['date'] = formatted_date
+                    
+                except Exception as e:
+                    print(f"Error converting timezone for historical candle {candle}: {e}")
+                    continue
+        
+        # Convert quote data timestamps if they exist
+        if quote_data:
+            # Convert timestamp field
+            if 'timestamp' in quote_data:
+                try:
+                    original_timestamp = quote_data['timestamp']
+                    if isinstance(original_timestamp, str):
+                        if 'GMT' in original_timestamp:
+                            gmt_dt = parsedate_to_datetime(original_timestamp)
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                        else:
+                            gmt_dt = datetime.fromisoformat(original_timestamp.replace('Z', '+00:00'))
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                    else:
+                        ist_dt = original_timestamp.astimezone(ist_timezone)
+                    
+                    quote_data['timestamp'] = ist_dt.strftime('%A, %d %b %Y %H:%M:%S %Z')
+                except Exception as e:
+                    print(f"Error converting quote timestamp: {e}")
+            
+            # Convert last_trade_time field
+            if 'last_trade_time' in quote_data:
+                try:
+                    original_trade_time = quote_data['last_trade_time']
+                    if isinstance(original_trade_time, str):
+                        if 'GMT' in original_trade_time:
+                            gmt_dt = parsedate_to_datetime(original_trade_time)
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                        else:
+                            gmt_dt = datetime.fromisoformat(original_trade_time.replace('Z', '+00:00'))
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                    else:
+                        ist_dt = original_trade_time.astimezone(ist_timezone)
+                    
+                    quote_data['last_trade_time'] = ist_dt.strftime('%A, %d %b %Y %H:%M:%S %Z')
+                except Exception as e:
+                    print(f"Error converting last_trade_time: {e}")
+        
         # Compile detailed stock information
         stock_detail = {
             'symbol': instrument['tradingsymbol'],
@@ -260,7 +328,8 @@ def get_stock_detail(symbol):
             'lot_size': instrument['lot_size'],
             'quote': quote_data,
             'historical_data': historical_data,
-            'last_updated': datetime.now().isoformat()
+            'last_updated': datetime.now(ist_timezone).strftime('%A, %d %b %Y %H:%M:%S %Z'),
+            'timezone': 'Asia/Kolkata (IST)'
         }
         
         return jsonify(stock_detail)
@@ -982,7 +1051,41 @@ def get_stock_historical_data(symbol):
         traceback.print_exc()
         return jsonify({"error":f"Failed to fetch data: {e}"}), 500
 
-    # 5. Build & return response
+    # 5. Convert timestamps to local timezone (IST) with day name
+    ist_timezone = pytz.timezone('Asia/Kolkata')
+    
+    for candle in data:
+        try:
+            # Parse the original date
+            original_date = candle['date']
+            
+            if isinstance(original_date, str):
+                # Handle string format like "Sun, 01 Jan 2023 18:30:00 GMT"
+                if 'GMT' in original_date:
+                    # Parse GMT date and convert to IST
+                    gmt_dt = parsedate_to_datetime(original_date)
+                    ist_dt = gmt_dt.astimezone(ist_timezone)
+                else:
+                    # Handle ISO format
+                    gmt_dt = datetime.fromisoformat(original_date.replace('Z', '+00:00'))
+                    ist_dt = gmt_dt.astimezone(ist_timezone)
+            else:
+                # Handle datetime object
+                ist_dt = original_date.astimezone(ist_timezone)
+            
+            # Format with day name, date, time and timezone
+            # Format: "Monday, 02 Jan 2023 00:00:00 IST"
+            formatted_date = ist_dt.strftime('%A, %d %b %Y %H:%M:%S %Z')
+            
+            # Update the date field with IST timestamp including day name
+            candle['date'] = formatted_date
+            
+        except Exception as e:
+            print(f"Error converting timezone for candle {candle}: {e}")
+            # Keep original if conversion fails
+            continue
+
+    # 6. Build & return response
     resp = {
         'symbol': instrument['tradingsymbol'],
         'name': instrument.get('name',''),
@@ -993,7 +1096,8 @@ def get_stock_historical_data(symbol):
         'interval': interval,
         'data_points': len(data),
         'historical_data': data,
-        'last_updated': datetime.now().isoformat()
+        'last_updated': datetime.now(ist_timezone).strftime('%A, %d %b %Y %H:%M:%S %Z'),
+        'timezone': 'Asia/Kolkata (IST)'
     }
 
     if freq_input in ('month','monthly'):
