@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 from datetime import datetime, timedelta, time , date
 import pytz
 import traceback
+from email.utils import parsedate_to_datetime
 
 # Third-party imports
 from flask import Flask, jsonify, request
@@ -850,111 +851,167 @@ def get_combined_stock_events(symbol):
     except Exception as e:
         return jsonify({"error": "Failed to fetch stock events", "details": str(e)}), 500
 
+def fetch_daily_full(instrument_token, start_date, end_date):
+    """
+    Fetch daily bars in 100-day chunks to ensure full coverage.
+    """
+    delta = timedelta(days=100)
+    current_start = start_date
+    all_bars = []
+    while current_start <= end_date:
+        current_end = min(current_start + delta, end_date)
+        try:
+            bars = kite.historical_data(
+                instrument_token=instrument_token,
+                from_date=current_start,
+                to_date=current_end,
+                interval='day'
+            ) or []
+        except Exception as e:
+            print(f"Error fetching {current_start} to {current_end}: {e}")
+            bars = []
+        all_bars.extend(bars)
+        current_start = current_end + timedelta(days=1)
+    # Deduplicate by date and sort
+    unique = {}
+    for bar in all_bars:
+        dt = bar['date'].date() if hasattr(bar['date'], 'date') \
+             else datetime.fromisoformat(str(bar['date']).replace('Z','+00:00')).date()
+        unique[dt] = bar
+    return [unique[dt] for dt in sorted(unique.keys())]
+
+def extract_last_trading_days(daily_candles, start_date, end_date):
+    """
+    From a complete daily series, return one candle per calendar month,
+    selecting the last available trading day in each month.
+    """
+    parsed = []
+    for candle in daily_candles:
+        if hasattr(candle['date'], 'date'):
+            dt = candle['date'].date()
+        else:
+            dt = datetime.fromisoformat(str(candle['date']).replace('Z','+00:00')).date()
+        if start_date <= dt <= end_date:
+            parsed.append((dt, candle))
+
+    parsed.sort(key=lambda x: x[0])
+
+    last_by_month = {}
+    for dt, candle in parsed:
+        key = (dt.year, dt.month)
+        last_by_month[key] = candle
+
+    return [ last_by_month[ym] for ym in sorted(last_by_month.keys()) ]
+
 @app.route('/api/stocks/<symbol>/historical', methods=['GET'])
 def get_stock_historical_data(symbol):
-    """Get historical data for a specific stock with custom date range and frequency"""
+    """Get historical data for a specific stock with custom date range and frequency."""
+    # 1. Read & validate query parameters
+    start_date_str = request.args.get('start_date')
+    end_date_str   = request.args.get('end_date')
+    freq_input     = request.args.get('frequency', 'day').lower()
+
+    if not start_date_str or not end_date_str:
+        return jsonify({
+            "error": "start_date and end_date are required. Format: YYYY-MM-DD"
+        }), 400
+
+    freq_map = {
+        'day':'day','daily':'day',
+        'week':'week','weekly':'week',
+        'month':'day','monthly':'day'
+    }
+    if freq_input not in freq_map:
+        return jsonify({
+            "error": f"Invalid frequency. Must be one of: {', '.join(freq_map)}"
+        }), 400
+
+    # 2. Parse & sanity‐check dates
     try:
-        # Get query parameters
-        start_date_str = request.args.get('start_date')
-        end_date_str = request.args.get('end_date')
-        frequency = request.args.get('frequency', 'day').lower()
-        
-        # Validate required parameters
-        if not start_date_str or not end_date_str:
-            return jsonify({
-                "error": "start_date and end_date are required parameters. Format: YYYY-MM-DD"
-            }), 400
-        
-        # Validate frequency
-        valid_frequencies = ['day', 'daily', 'week', 'weekly', 'month', 'monthly']
-        if frequency not in valid_frequencies:
-            return jsonify({
-                "error": f"Invalid frequency. Must be one of: {', '.join(valid_frequencies)}"
-            }), 400
-        
-        # Map frequency to KiteConnect interval format
-        frequency_mapping = {
-            'day': 'day',
-            'daily': 'day',
-            'week': 'week',
-            'weekly': 'week',
-            'month': 'month',
-            'monthly': 'month'
-        }
-        interval = frequency_mapping[frequency]
-        
-        # Parse dates
-        try:
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-        except ValueError:
-            return jsonify({
-                "error": "Invalid date format. Use YYYY-MM-DD format."
-            }), 400
-        
-        # Validate date range
-        if start_date > end_date:
-            return jsonify({
-                "error": "start_date cannot be later than end_date"
-            }), 400
-        
-        # Check if end_date is not in the future
-        today = datetime.now().date()
-        if end_date > today:
-            return jsonify({
-                "error": "end_date cannot be in the future"
-            }), 400
-        
-        # Find instrument details
-        instruments = get_all_instruments()
-        instrument = None
-        
-        for inst in instruments:
-            if inst['tradingsymbol'] == symbol.upper():
-                instrument = inst
-                break
-        
-        if not instrument:
-            return jsonify({
-                "error": f"Stock '{symbol}' not found"
-            }), 404
-        
-        # Fetch historical data
-        try:
-            historical_data = kite.historical_data(
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date   = datetime.strptime(end_date_str,   '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({"error":"Invalid date format. Use YYYY-MM-DD."}), 400
+
+    if start_date > end_date:
+        return jsonify({"error":"start_date cannot be after end_date"}), 400
+    if end_date > datetime.now().date():
+        return jsonify({"error":"end_date cannot be in the future"}), 400
+
+    # 3. Lookup instrument_token
+    instruments = get_all_instruments()
+    instrument = next((i for i in instruments if i['tradingsymbol'] == symbol.upper()), None)
+    if not instrument:
+        return jsonify({"error": f"Stock '{symbol}' not found"}), 404
+
+    # 4. Fetch & filter data
+    interval = freq_map[freq_input]
+    try:
+        if freq_input in ('month','monthly'):
+            # Fetch full daily series then extract last trading-day of each month
+            raw_daily = fetch_daily_full(
+                instrument['instrument_token'],
+                start_date, end_date
+            )
+            data = extract_last_trading_days(raw_daily, start_date, end_date)
+        else:
+            # daily/weekly: fetch directly at requested interval
+            raw = kite.historical_data(
                 instrument_token=instrument['instrument_token'],
                 from_date=start_date,
                 to_date=end_date,
                 interval=interval
-            )
-            
-            # Format the response
-            response = {
-                'symbol': instrument['tradingsymbol'],
-                'name': instrument['name'],
-                'instrument_token': instrument['instrument_token'],
-                'start_date': start_date_str,
-                'end_date': end_date_str,
-                'frequency': frequency,
-                'interval': interval,
-                'data_points': len(historical_data),
-                'historical_data': historical_data,
-                'last_updated': datetime.now().isoformat()
-            }
-            
-            return jsonify(response)
-            
-        except Exception as e:
-            print(f"Error fetching historical data for {symbol}: {e}")
-            return jsonify({
-                "error": f"Failed to fetch historical data: {str(e)}"
-            }), 500
-    
+            ) or []
+            data = []
+            for candle in raw:
+                try:
+                    if hasattr(candle['date'], 'date'):
+                        dt = candle['date'].date()
+                    else:
+                        date_str = str(candle['date'])
+                        if 'GMT' in date_str:
+                            dt = parsedate_to_datetime(date_str).date()
+                        else:
+                            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00')).date()
+                    if start_date <= dt <= end_date:
+                        data.append(candle)
+                except Exception as e:
+                    print(f"Error processing candle: {e}")
+                    continue
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-@app.route("/health")
-def health():
-    return "OK", 200
+        traceback.print_exc()
+        return jsonify({"error":f"Failed to fetch data: {e}"}), 500
+
+    # 5. Build & return response
+    resp = {
+        'symbol': instrument['tradingsymbol'],
+        'name': instrument.get('name',''),
+        'instrument_token': instrument['instrument_token'],
+        'start_date': start_date_str,
+        'end_date': end_date_str,
+        'frequency': freq_input,
+        'interval': interval,
+        'data_points': len(data),
+        'historical_data': data,
+        'last_updated': datetime.now().isoformat()
+    }
+
+    if freq_input in ('month','monthly'):
+        resp['note'] = ('Monthly data shows the last trading-day of each month '
+                        '(or previous trading-day if month-end was a holiday/weekend).')
+
+    if not data:
+        resp['debug_info'] = {
+            'message': 'No data available for the specified range.',
+            'suggestions': [
+                'Try a more recent date range.',
+                'Ensure dates fall on trading days (not weekends/holidays).',
+                'Verify the stock symbol.',
+                'Avoid very distant past ranges.'
+            ]
+        }
+
+    return jsonify(resp)
 
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
