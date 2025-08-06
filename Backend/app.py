@@ -787,6 +787,109 @@ def get_combined_stock_events(symbol):
     except Exception as e:
         return jsonify({"error": "Failed to fetch stock events", "details": str(e)}), 500
 
+@app.route('/api/stocks/<symbol>/historical', methods=['GET'])
+def get_stock_historical_data(symbol):
+    """Get historical data for a specific stock with custom date range and frequency"""
+    try:
+        # Get query parameters
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        frequency = request.args.get('frequency', 'day').lower()
+        
+        # Validate required parameters
+        if not start_date_str or not end_date_str:
+            return jsonify({
+                "error": "start_date and end_date are required parameters. Format: YYYY-MM-DD"
+            }), 400
+        
+        # Validate frequency
+        valid_frequencies = ['day', 'daily', 'week', 'weekly', 'month', 'monthly']
+        if frequency not in valid_frequencies:
+            return jsonify({
+                "error": f"Invalid frequency. Must be one of: {', '.join(valid_frequencies)}"
+            }), 400
+        
+        # Map frequency to KiteConnect interval format
+        frequency_mapping = {
+            'day': 'day',
+            'daily': 'day',
+            'week': 'week',
+            'weekly': 'week',
+            'month': 'month',
+            'monthly': 'month'
+        }
+        interval = frequency_mapping[frequency]
+        
+        # Parse dates
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({
+                "error": "Invalid date format. Use YYYY-MM-DD format."
+            }), 400
+        
+        # Validate date range
+        if start_date > end_date:
+            return jsonify({
+                "error": "start_date cannot be later than end_date"
+            }), 400
+        
+        # Check if end_date is not in the future
+        today = datetime.now().date()
+        if end_date > today:
+            return jsonify({
+                "error": "end_date cannot be in the future"
+            }), 400
+        
+        # Find instrument details
+        instruments = get_all_instruments()
+        instrument = None
+        
+        for inst in instruments:
+            if inst['tradingsymbol'] == symbol.upper():
+                instrument = inst
+                break
+        
+        if not instrument:
+            return jsonify({
+                "error": f"Stock '{symbol}' not found"
+            }), 404
+        
+        # Fetch historical data
+        try:
+            historical_data = kite.historical_data(
+                instrument_token=instrument['instrument_token'],
+                from_date=start_date,
+                to_date=end_date,
+                interval=interval
+            )
+            
+            # Format the response
+            response = {
+                'symbol': instrument['tradingsymbol'],
+                'name': instrument['name'],
+                'instrument_token': instrument['instrument_token'],
+                'start_date': start_date_str,
+                'end_date': end_date_str,
+                'frequency': frequency,
+                'interval': interval,
+                'data_points': len(historical_data),
+                'historical_data': historical_data,
+                'last_updated': datetime.now().isoformat()
+            }
+            
+            return jsonify(response)
+            
+        except Exception as e:
+            print(f"Error fetching historical data for {symbol}: {e}")
+            return jsonify({
+                "error": f"Failed to fetch historical data: {str(e)}"
+            }), 500
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
     for tick in ticks:
