@@ -1,13 +1,25 @@
-# Use an official Python image
+# Use official slim Python image
 FROM python:3.10-slim
 
-# Install system dependencies including Chrome and ChromeDriver
-RUN apt-get update && \
-    apt-get install -y \
+# Set environment variables for Chromium
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMEDRIVER_PATH=/usr/lib/chromium/chromedriver
+ENV DISPLAY=:99
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+ENV WDM_LOCAL=1
+ENV WDM_SSL_VERIFY=0
+ENV WDM_CACHE_PATH=/tmp/disabled
+ENV SELENIUM_DRIVER_PATH=/usr/lib/chromium/chromedriver
+
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    chromium-driver \
     wget \
-    gnupg \
-    unzip \
     curl \
+    unzip \
+    gnupg \
     xvfb \
     fonts-liberation \
     libasound2 \
@@ -25,44 +37,57 @@ RUN apt-get update && \
     libxrandr2 \
     libxss1 \
     libxtst6 \
-    xdg-utils && \
-    rm -rf /var/lib/apt/lists/*
+    xdg-utils \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Google Chrome
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - && \
-    echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
-    apt-get update && \
-    apt-get install -y google-chrome-stable && \
-    rm -rf /var/lib/apt/lists/*
+# Verify ChromeDriver installation immediately after package install
+RUN echo "=== Immediate ChromeDriver Verification ===" && \
+    echo "Checking if chromium-driver package installed ChromeDriver:" && \
+    dpkg -l | grep chromium && \
+    echo "Searching for chromedriver files:" && \
+    find /usr -name "*chromedriver*" 2>/dev/null || echo "No chromedriver found" && \
+    echo "Checking specific locations:" && \
+    ls -la /usr/lib/chromium/chromedriver 2>/dev/null || echo "Not in /usr/lib/chromium/" && \
+    ls -la /usr/bin/chromedriver 2>/dev/null || echo "Not in /usr/bin/" && \
+    echo "Package installation verification complete"
 
-# Install ChromeDriver
-RUN CHROME_VERSION=$(google-chrome --version | grep -oE "[0-9]+\.[0-9]+\.[0-9]+") && \
-    CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION") && \
-    wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" -O /tmp/chromedriver.zip && \
-    unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
-    chmod +x /usr/local/bin/chromedriver && \
-    rm /tmp/chromedriver.zip
+# Link chromium binary for compatibility and verify ChromeDriver installation
+RUN ln -sf /usr/bin/chromium /usr/bin/google-chrome && \
+    echo "=== ChromeDriver Installation Verification ===" && \
+    echo "Checking /usr/lib/chromium/chromedriver:" && \
+    ls -la /usr/lib/chromium/chromedriver 2>/dev/null || echo "Not found in /usr/lib/chromium/" && \
+    echo "Checking /usr/bin/chromedriver:" && \
+    ls -la /usr/bin/chromedriver 2>/dev/null || echo "Not found in /usr/bin/" && \
+    echo "Creating symlinks..." && \
+    ln -sf /usr/bin/chromedriver /usr/local/bin/chromedriver 2>/dev/null || echo "Could not create symlink" && \
+    echo "Final ChromeDriver locations:" && \
+    find /usr -name "*chromedriver*" 2>/dev/null || echo "No chromedriver found in /usr"
 
-# Set environment variables for Chrome
-ENV CHROME_BIN=/usr/bin/google-chrome
-ENV CHROMEDRIVER_BIN=/usr/local/bin/chromedriver
-ENV DISPLAY=:99
-
-# Set work directory
+# Set working directory
 WORKDIR /app
 
 # Copy requirements and install
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of your code
+# Copy app code
 COPY . .
 
 # Make startup script executable
 RUN chmod +x start.sh
 
-# Expose the port Flask runs on
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Expose port
 EXPOSE 5000
 
-# Start the Flask app
+# Optional health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5000/api/market_status || exit 1
+
+# Start app
 CMD ["./start.sh"]

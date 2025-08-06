@@ -13,34 +13,32 @@ def test_chrome_installation():
     
     # Check environment variables
     chrome_bin = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
-    chromedriver_bin = os.getenv("CHROMEDRIVER_BIN", "/usr/local/bin/chromedriver")
     display = os.getenv("DISPLAY", ":99")
     
     print(f"CHROME_BIN: {chrome_bin}")
-    print(f"CHROMEDRIVER_BIN: {chromedriver_bin}")
     print(f"DISPLAY: {display}")
     
-    # Check if files exist
-    try:
-        result = subprocess.run(['ls', '-la', chrome_bin], capture_output=True, text=True)
-        if result.returncode == 0:
-            print(f"✅ Chrome binary found: {result.stdout.strip()}")
-        else:
-            print(f"❌ Chrome binary not found: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"❌ Error checking Chrome binary: {e}")
-        return False
+    # Try multiple Chrome binary locations
+    chrome_paths = [
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        chrome_bin
+    ]
     
-    try:
-        result = subprocess.run(['ls', '-la', chromedriver_bin], capture_output=True, text=True)
-        if result.returncode == 0:
-            print(f"✅ ChromeDriver binary found: {result.stdout.strip()}")
-        else:
-            print(f"❌ ChromeDriver binary not found: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"❌ Error checking ChromeDriver binary: {e}")
+    found_chrome = None
+    for path in chrome_paths:
+        try:
+            result = subprocess.run(['ls', '-la', path], capture_output=True, text=True)
+            if result.returncode == 0:
+                print(f"✅ Chrome binary found at: {path}")
+                found_chrome = path
+                break
+        except Exception:
+            continue
+    
+    if not found_chrome:
+        print("❌ No Chrome binary found in common locations")
         return False
     
     # Test Chrome version
@@ -53,18 +51,6 @@ def test_chrome_installation():
             return False
     except Exception as e:
         print(f"❌ Error testing Chrome version: {e}")
-        return False
-    
-    # Test ChromeDriver version
-    try:
-        result = subprocess.run([chromedriver_bin, '--version'], capture_output=True, text=True)
-        if result.returncode == 0:
-            print(f"✅ ChromeDriver version: {result.stdout.strip()}")
-        else:
-            print(f"❌ Error getting ChromeDriver version: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"❌ Error testing ChromeDriver version: {e}")
         return False
     
     return True
@@ -89,18 +75,33 @@ def test_webdriver_creation():
         from selenium import webdriver
         from selenium.webdriver.chrome.service import Service
         from selenium.webdriver.chrome.options import Options
+        from webdriver_manager.chrome import ChromeDriverManager
+        from selenium.webdriver.chrome.service import Service as ChromeService
         
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
-        chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
+        chrome_options.add_argument("--disable-software-rasterizer")
+        chrome_options.add_argument("--disable-setuid-sandbox")
         
-        chromedriver_bin = os.getenv("CHROMEDRIVER_BIN", "/usr/local/bin/chromedriver")
+        # Try to find Chrome binary
+        chrome_bin = os.getenv("CHROME_BIN")
+        if not chrome_bin:
+            for path in ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"]:
+                if os.path.exists(path):
+                    chrome_bin = path
+                    break
+        
+        if chrome_bin:
+            chrome_options.binary_location = chrome_bin
+            print(f"Using Chrome binary: {chrome_bin}")
+        else:
+            print("No Chrome binary found, using default")
         
         driver = webdriver.Chrome(
-            service=Service(chromedriver_bin),
+            service=ChromeService(ChromeDriverManager().install()),
             options=chrome_options
         )
         
