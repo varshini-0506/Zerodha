@@ -427,6 +427,11 @@ def get_market_status():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for uptime monitoring"""
+    return "OK", 200
+
 @app.route('/api/search', methods=['GET'])
 def search_stocks():
     """Search stocks by symbol or name"""
