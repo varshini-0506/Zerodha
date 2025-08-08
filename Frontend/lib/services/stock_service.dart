@@ -9,7 +9,19 @@ class StockService {
   static const String baseUrl = 'https://zerodha-ay41.onrender.com/api';
   
   // HTTP client with optimized configuration for mobile networks
-  static final http.Client _client = http.Client();
+  static http.Client? _client;
+  
+  // Initialize HTTP client with better mobile configuration
+  static http.Client get _getClient {
+    _client ??= http.Client();
+    return _client!;
+  }
+  
+  // Close client when done
+  static void _closeClient() {
+    _client?.close();
+    _client = null;
+  }
   
   // Increased timeout for mobile networks
   static const Duration _timeout = Duration(seconds: 30);
@@ -42,7 +54,7 @@ class StockService {
           print('Making request to: $uri');
         }
         
-        final response = await _client.get(uri).timeout(_timeout);
+        final response = await _getClient.get(uri).timeout(_timeout);
         
         if (kDebugMode) {
           print('Response status: ${response.statusCode}');
@@ -83,7 +95,7 @@ class StockService {
           print('Making request to: $uri');
         }
         
-        final response = await _client.get(uri).timeout(_timeout);
+        final response = await _getClient.get(uri).timeout(_timeout);
         
         if (kDebugMode) {
           print('Popular stocks response status: ${response.statusCode}');
@@ -137,47 +149,46 @@ class StockService {
       try {
         final uri = Uri.parse('$baseUrl/stocks/batch_quotes');
         
-        if (kDebugMode) {
-          print('Making batch quotes request to: $uri');
-          print('Symbols: $symbols');
-        }
+        // Log in both debug and release mode for troubleshooting
+        print('🔄 Making batch quotes request to: $uri');
+        print('📊 Symbols count: ${symbols.length}');
+        print('📋 Symbols: ${symbols.take(5).join(', ')}${symbols.length > 5 ? '...' : ''}');
         
         // Add headers for better mobile compatibility
         final headers = {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Connection': 'keep-alive',
+          'User-Agent': 'ZerodhaApp/1.0',
         };
         
-        final response = await _client.post(
+        final response = await _getClient.post(
           uri,
           headers: headers,
           body: json.encode({'symbols': symbols}),
         ).timeout(_timeout);
         
-        if (kDebugMode) {
-          print('Batch quotes response status: ${response.statusCode}');
-        }
+        print('📡 Batch quotes response status: ${response.statusCode}');
+        print('📄 Response body length: ${response.body.length}');
         
         if (response.statusCode == 200) {
-          return json.decode(response.body);
+          final data = json.decode(response.body);
+          print('✅ Successfully parsed batch quotes response');
+          print('📈 Quotes received: ${(data['quotes'] as Map<String, dynamic>?)?.length ?? 0}');
+          return data;
         } else {
+          print('❌ Batch quotes failed with status: ${response.statusCode}');
+          print('📄 Error response: ${response.body}');
           throw Exception('Failed to load batch quotes: ${response.statusCode} - ${response.body}');
         }
       } on SocketException catch (e) {
-        if (kDebugMode) {
-          print('Network error in getBatchQuotes: $e');
-        }
+        print('🌐 Network error in getBatchQuotes: $e');
         throw Exception('Network error: Please check your internet connection');
       } on TimeoutException catch (e) {
-        if (kDebugMode) {
-          print('Timeout error in getBatchQuotes: $e');
-        }
+        print('⏰ Timeout error in getBatchQuotes: $e');
         throw Exception('Request timeout: Please try again');
       } catch (e) {
-        if (kDebugMode) {
-          print('Error in getBatchQuotes: $e');
-        }
+        print('💥 Error in getBatchQuotes: $e');
         throw Exception('Error fetching batch quotes: $e');
       }
     });
@@ -243,24 +254,28 @@ class StockService {
 
   // Test API connectivity
   static Future<bool> testApiConnection() async {
+    print('🚀 Starting API connection test...');
+    print('📡 Base URL: $baseUrl');
     try {
       final uri = Uri.parse('$baseUrl/market_status');
       
-      if (kDebugMode) {
-        print('Testing API connection to: $uri');
+      print('🔍 Testing API connection to: $uri');
+      
+      final response = await _getClient.get(uri).timeout(Duration(seconds: 10));
+      
+      print('📡 API test response status: ${response.statusCode}');
+      print('📄 Response body length: ${response.body.length}');
+      
+      if (response.statusCode == 200) {
+        print('✅ API connection successful');
+        return true;
+      } else {
+        print('❌ API connection failed with status: ${response.statusCode}');
+        print('📄 Error response: ${response.body}');
+        return false;
       }
-      
-      final response = await _client.get(uri).timeout(Duration(seconds: 10));
-      
-      if (kDebugMode) {
-        print('API test response status: ${response.statusCode}');
-      }
-      
-      return response.statusCode == 200;
     } catch (e) {
-      if (kDebugMode) {
-        print('API connection test failed: $e');
-      }
+      print('💥 API connection test failed: $e');
       return false;
     }
   }

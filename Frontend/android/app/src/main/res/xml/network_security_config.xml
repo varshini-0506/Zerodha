@@ -1,11 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">zerodha-ay41.onrender.com</domain>
-    </domain-config>
-    <base-config cleartextTrafficPermitted="true">
+    <!-- Base configuration for all connections -->
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
-            <certificates src="system"/>
+            <!-- Trust system certificates -->
+            <certificates src="system" />
         </trust-anchors>
     </base-config>
-</network-security-config> 
+    
+    <!-- Domain-specific configuration for our API -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">zerodha-ay41.onrender.com</domain>
+        <domain includeSubdomains="true">onrender.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </domain-config>
+    
+    <!-- Debug configuration for troubleshooting -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>
