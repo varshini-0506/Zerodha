@@ -1205,6 +1205,7 @@ def background_tick_sender():
             ticks_list = list(latest_ticks.values())
             socketio.emit('tick_data', {'data': ticks_list, 'timestamp': datetime.now().isoformat()})
         time.sleep(0.1)
+        
 
 @socketio.on('connect')
 def handle_connect():
@@ -1213,10 +1214,21 @@ def handle_connect():
         "timestamp": datetime.now().isoformat(),
         "total_instruments": len(get_all_instruments())
     })
+HEARTBEAT_INTERVAL = 20  # seconds
 
+def background_heartbeat():
+    while True:
+        socketio.emit('heartbeat', {'message': 'ping', 'timestamp': datetime.now().isoformat()})
+        time.sleep(HEARTBEAT_INTERVAL)
+
+@socketio.on('ping_from_client')
+def on_client_ping():
+    emit('pong_from_server', {'message': 'pong', 'timestamp': datetime.now().isoformat()})
+    
 if __name__ == "__main__":
     print("Starting Zerodha WebSocket streamer...")
     # Start background tasks using SocketIO's method
     socketio.start_background_task(start_kite_ws)
     socketio.start_background_task(background_tick_sender)
+    socketio.start_background_task(background_heartbeat)
     socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000))) 
