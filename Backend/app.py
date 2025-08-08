@@ -700,16 +700,86 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, WebDriverException
 import os, pyotp
 from kiteconnect import KiteConnect
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 from supabase import create_client
-# Removed ChromeDriver import - using webdriver.Chrome instead
+import threading
+import uuid
+import logging
+from webdriver_manager.chrome import ChromeDriverManager
 
-@app.route("/api/refresh_zerodha_token", methods=["POST"])
-def refresh_zerodha_token():
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Global job storage (in production, use Redis or database)
+_JOB_RESULTS = {}
+_JOB_LOCK = threading.Lock()
+
+def _store_job_result(job_id, payload):
+    with _JOB_LOCK:
+        _JOB_RESULTS[job_id] = payload
+
+def _get_job_result(job_id):
+    with _JOB_LOCK:
+        return _JOB_RESULTS.get(job_id)
+
+def _create_driver():
+    # Chrome binary from env
+    chrome_bin = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
+    options = Options()
+    options.binary_location = chrome_bin
+    # Prefer modern headless mode if supported
+    try:
+        options.add_argument("--headless=new")
+    except Exception:
+        options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-setuid-sandbox")
+
+    # 1) Try Selenium default
+    try:
+        logger.info("Attempt Selenium default Chrome driver")
+        drv = webdriver.Chrome(options=options)
+        return drv
+    except Exception as e:
+        logger.info(f"Selenium default failed: {e}")
+
+    # 2) Try common paths
+    possible = [
+        "/usr/lib/chromium/chromedriver",
+        "/usr/bin/chromedriver",
+        "/usr/local/bin/chromedriver",
+        os.environ.get("CHROMEDRIVER_PATH"),
+        os.environ.get("SELENIUM_DRIVER_PATH"),
+    ]
+    for p in possible:
+        if p and os.path.exists(p):
+            try:
+                svc = Service(executable_path=p)
+                drv = webdriver.Chrome(service=svc, options=options)
+                return drv
+            except Exception as e:
+                logger.info(f"Driver at {p} failed: {e}")
+
+    # 3) Fallback to webdriver-manager (downloads matching chromedriver)
+    try:
+        path = ChromeDriverManager().install()
+        svc = Service(executable_path=path)
+        drv = webdriver.Chrome(service=svc, options=options)
+        return drv
+    except Exception as e:
+        logger.exception("webdriver-manager fallback failed")
+        raise WebDriverException("Could not create ChromeDriver")
+
+def _perform_refresh_flow(job_id):
     result = {
         "success": False,
         "access_token": "",
@@ -718,12 +788,15 @@ def refresh_zerodha_token():
         "supabase_response": "",
         "debug_screenshot": "",
         "debug_html": "",
-        "network_check": ""
+        "network_check": "",
+        "started_at": datetime.utcnow().isoformat(),
+        "finished_at": None
     }
+    _store_job_result(job_id, result)
 
     driver = None
     try:
-        # Load and validate secrets
+        # load envs
         Z_USERNAME = os.getenv("KITE_USERNAME", "").strip()
         Z_PASSWORD = os.getenv("KITE_PASSWORD", "").strip()
         TOTP_SECRET = os.getenv("TOTP_SECRET", "").strip()
@@ -732,162 +805,156 @@ def refresh_zerodha_token():
         SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
         SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 
-        # Validate all required environment variables
-        missing_vars = []
-        if not Z_USERNAME: missing_vars.append("KITE_USERNAME")
-        if not Z_PASSWORD: missing_vars.append("KITE_PASSWORD")
-        if not TOTP_SECRET: missing_vars.append("TOTP_SECRET")
-        if not API_KEY: missing_vars.append("KITE_API_KEY")
-        if not API_SECRET: missing_vars.append("KITE_API_SECRET")
-        if not SUPABASE_URL: missing_vars.append("SUPABASE_URL")
-        if not SUPABASE_KEY: missing_vars.append("SUPABASE_KEY")
+        missing = [v for v, name in [
+            (Z_USERNAME, "KITE_USERNAME"), (Z_PASSWORD, "KITE_PASSWORD"),
+            (TOTP_SECRET, "TOTP_SECRET"), (API_KEY, "KITE_API_KEY"),
+            (API_SECRET, "KITE_API_SECRET"), (SUPABASE_URL, "SUPABASE_URL"),
+            (SUPABASE_KEY, "SUPABASE_KEY")] if not v]
+        if missing:
+            result["error"] = f"Missing required envs: {', '.join([n for _, n in missing])}"
+            _store_job_result(job_id, result)
+            return
 
-        if missing_vars:
-            result["error"] = f"Missing required environment variables: {', '.join(missing_vars)}"
-            result["success"] = False
-            return jsonify(result)
-
-        # Validate TOTP secret early
+        # quick TOTP check
         try:
-            pyotp.TOTP(TOTP_SECRET).now()
+            _ = pyotp.TOTP(TOTP_SECRET).now()
         except Exception as e:
-            result["error"] = f"Invalid TOTP_SECRET: {str(e)}"
-            result["success"] = False
-            return jsonify(result)
+            result["error"] = f"Invalid TOTP secret: {e}"
+            _store_job_result(job_id, result)
+            return
 
-        # Network diagnostics
-        debug_msg = []
+        # network checks
+        nc = []
         try:
-            ip = socket.gethostbyname("kite.zerodha.com")
-            debug_msg.append(f"DNS OK: kite.zerodha.com -> {ip}")
+            nc.append(f"DNS:{socket.gethostbyname('kite.zerodha.com')}")
         except Exception as e:
-            debug_msg.append(f"DNS FAIL: {e}")
-
+            nc.append(f"DNS_FAIL:{e}")
         try:
             r = requests.get("https://kite.zerodha.com", timeout=10)
-            debug_msg.append(f"Requests status: {r.status_code}")
+            nc.append(f"HTTP:{r.status_code}")
         except Exception as e:
-            debug_msg.append(f"Requests FAIL: {e}")
-        result["network_check"] = " | ".join(debug_msg)
+            nc.append(f"HTTP_FAIL:{e}")
+        result["network_check"] = " | ".join(nc)
 
-        # Supabase client
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-        # Chrome Options
-        chrome_options = Options()
-        chrome_options.set_capability("browserName", "chrome")
-        chrome_options.binary_location = "/usr/bin/chromium"
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-software-rasterizer")
-        chrome_options.add_argument("--disable-setuid-sandbox")
-        chrome_options.add_argument("--dns-prefetch-disable")
-        chrome_options.add_argument("--window-size=1920,1080")
-
-        # Try multiple ChromeDriver paths
-        chromedriver_paths = [
-            "/usr/lib/chromium/chromedriver",  # Primary Chromium location
-            "/usr/local/bin/chromedriver",     # Symlink location
-            "/usr/bin/chromedriver",           # Alternative location
-            os.getenv('CHROMEDRIVER_PATH'),    # Environment variable
-            os.getenv('SELENIUM_DRIVER_PATH')  # Selenium environment variable
-        ]
-        
-        driver = None
-        chromedriver_path = None
-        
-        for path in chromedriver_paths:
-            if path and os.path.exists(path):
-                try:
-                    print(f"Trying ChromeDriver at: {path}")
-                    service = Service(executable_path=path)
-                    driver = webdriver.Chrome(service=service, options=chrome_options)
-                    chromedriver_path = path
-                    print(f"✅ ChromeDriver created successfully with path: {path}")
-                    break
-                except Exception as e:
-                    print(f"❌ ChromeDriver failed at {path}: {e}")
-                    continue
-        
-        if driver is None:
-            print("❌ ChromeDriver not found in any location")
-            print("Available ChromeDriver locations:")
-            for path in chromedriver_paths:
-                if path:
-                    print(f"  - {path}: {'✅ EXISTS' if os.path.exists(path) else '❌ NOT FOUND'}")
-            result["error"] = "ChromeDriver not found in any location. Please check Dockerfile installation."
-            result["success"] = False
-            return jsonify(result)
+        # create driver
+        driver = _create_driver()
         driver.set_page_load_timeout(60)
         wait = WebDriverWait(driver, 40)
 
-        # Step 1: Go to login
+        # go to login
         login_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={API_KEY}"
         driver.get(login_url)
 
-        # Step 2: Username and password
+        # username/password
         userid_field = wait.until(EC.presence_of_element_located((By.ID, "userid")))
         userid_field.clear()
         userid_field.send_keys(Z_USERNAME)
         driver.find_element(By.ID, "password").send_keys(Z_PASSWORD)
         driver.find_element(By.XPATH, "//button[@type='submit']").click()
 
-        # Step 3: TOTP page
+        # totp - try multiple selectors
         try:
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "form.twofa-form input#userid")))
-            totp_field = driver.find_element(By.CSS_SELECTOR, "form.twofa-form input#userid")
+            totp_selectors = [
+                "form.twofa-form input#userid",
+                "form.twofa-form input[name='twofa']",
+                "input#totp",
+                "input[name='otp']"
+            ]
+            totp_field = None
+            for sel in totp_selectors:
+                try:
+                    totp_field = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, sel)))
+                    if totp_field:
+                        break
+                except TimeoutException:
+                    continue
+            if totp_field is None:
+                raise TimeoutException("TOTP field not found")
+
             totp_field.clear()
             totp = pyotp.TOTP(TOTP_SECRET).now()
             totp_field.send_keys(totp)
-            driver.find_element(By.CSS_SELECTOR, "form.twofa-form button[type='submit']").click()
-        except TimeoutException:
-            result["debug_screenshot"] = base64.b64encode(driver.get_screenshot_as_png()).decode()
-            result["debug_html"] = driver.page_source
-            raise TimeoutException("TOTP form did not load.")
+            # submit 2FA
+            try:
+                driver.find_element(By.CSS_SELECTOR, "form.twofa-form button[type='submit']").click()
+            except Exception:
+                driver.find_element(By.XPATH, "//button[@type='submit']").click()
 
-        # Step 4: Wait for redirect with request_token
+        except TimeoutException as te:
+            # capture debug artifacts
+            try:
+                result["debug_screenshot"] = base64.b64encode(driver.get_screenshot_as_png()).decode()
+                result["debug_html"] = driver.page_source
+            except Exception:
+                pass
+            result["error"] = f"TOTP step failed: {te}"
+            _store_job_result(job_id, result)
+            return
+
+        # wait for redirect containing request_token
         wait.until(lambda d: "request_token" in d.current_url)
         redirected_url = driver.current_url
         parsed = urlparse(redirected_url)
         request_token = parse_qs(parsed.query).get("request_token", [None])[0]
         if not request_token:
-            raise Exception("Request token not found in redirected URL.")
+            result["error"] = f"Request token missing in URL: {redirected_url}"
+            _store_job_result(job_id, result)
+            return
+        result["request_token"] = request_token
 
-        # Step 5: Get access token from Kite
+        # get access token
         kite = KiteConnect(api_key=API_KEY)
         data = kite.generate_session(request_token, api_secret=API_SECRET)
-        access_token = data["access_token"]
+        access_token = data.get("access_token")
+        result["access_token"] = access_token
 
-        # Step 6: Save to Supabase
+        # save to supabase
         response = supabase.table("api_tokens").upsert({
             "service": "zerodha",
             "access_token": access_token,
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.utcnow().isoformat()
         }, on_conflict="service").execute()
+        result["supabase_response"] = getattr(response, "data", response)
 
-        # Final result
         result["success"] = True
-        result["access_token"] = access_token
-        result["request_token"] = request_token
-        result["supabase_response"] = response.data
-
-    except TimeoutException as te:
-        result["error"] = f"Timeout: {str(te)}"
+        result["finished_at"] = datetime.utcnow().isoformat()
+        _store_job_result(job_id, result)
     except Exception as e:
-        if driver:
-            try:
+        logger.exception("Refresh job failed")
+        result["error"] = str(e)
+        try:
+            if driver:
                 result["debug_screenshot"] = base64.b64encode(driver.get_screenshot_as_png()).decode()
                 result["debug_html"] = driver.page_source
-            except:
-                pass
-        result["error"] = str(e)
+        except Exception:
+            pass
+        result["finished_at"] = datetime.utcnow().isoformat()
+        _store_job_result(job_id, result)
     finally:
         if driver:
-            driver.quit()
+            try:
+                driver.quit()
+            except Exception:
+                pass
 
-    return jsonify(result)
+# Endpoint that starts background job and immediately returns job_id
+@app.route("/api/refresh_zerodha_token", methods=["POST"])
+def refresh_zerodha_token():
+    job_id = str(uuid.uuid4())
+    # start background thread
+    t = threading.Thread(target=_perform_refresh_flow, args=(job_id,), daemon=True)
+    t.start()
+    return jsonify({"status": "started", "job_id": job_id}), 202
+
+# Endpoint to fetch job result
+@app.route("/api/refresh_result/<job_id>", methods=["GET"])
+def refresh_result(job_id):
+    res = _get_job_result(job_id)
+    if res is None:
+        return jsonify({"error": "job_id not found"}), 404
+    return jsonify(res), 200
 
 @app.route('/api/stock_events/<symbol>', methods=['GET'])
 def get_combined_stock_events(symbol):

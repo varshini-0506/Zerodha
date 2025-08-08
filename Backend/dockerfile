@@ -1,93 +1,65 @@
-# Use official slim Python image
-FROM python:3.10-slim
+# Combined Dockerfile - Chromium + chromedriver verification + production gunicorn
+FROM python:3.11-slim
 
-# Set environment variables for Chromium
+# Basic env
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMEDRIVER_PATH=/usr/lib/chromium/chromedriver
-ENV DISPLAY=:99
-ENV PYTHONUNBUFFERED=1
-ENV DEBIAN_FRONTEND=noninteractive
-ENV WDM_LOCAL=1
-ENV WDM_SSL_VERIFY=0
-ENV WDM_CACHE_PATH=/tmp/disabled
-ENV SELENIUM_DRIVER_PATH=/usr/lib/chromium/chromedriver
+ENV PATH="$PATH:/root/.local/bin"
 
-# Install dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium \
-    chromium-driver \
-    wget \
-    curl \
-    unzip \
-    gnupg \
-    xvfb \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libatspi2.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libxss1 \
-    libxtst6 \
-    xdg-utils \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Verify ChromeDriver installation immediately after package install
-RUN echo "=== Immediate ChromeDriver Verification ===" && \
-    echo "Checking if chromium-driver package installed ChromeDriver:" && \
-    dpkg -l | grep chromium && \
-    echo "Searching for chromedriver files:" && \
-    find /usr -name "*chromedriver*" 2>/dev/null || echo "No chromedriver found" && \
-    echo "Checking specific locations:" && \
-    ls -la /usr/lib/chromium/chromedriver 2>/dev/null || echo "Not in /usr/lib/chromium/" && \
-    ls -la /usr/bin/chromedriver 2>/dev/null || echo "Not in /usr/bin/" && \
-    echo "Package installation verification complete"
-
-# Link chromium binary for compatibility and verify ChromeDriver installation
-RUN ln -sf /usr/bin/chromium /usr/bin/google-chrome && \
-    echo "=== ChromeDriver Installation Verification ===" && \
-    echo "Checking /usr/lib/chromium/chromedriver:" && \
-    ls -la /usr/lib/chromium/chromedriver 2>/dev/null || echo "Not found in /usr/lib/chromium/" && \
-    echo "Checking /usr/bin/chromedriver:" && \
-    ls -la /usr/bin/chromedriver 2>/dev/null || echo "Not found in /usr/bin/" && \
-    echo "Creating symlinks..." && \
-    ln -sf /usr/bin/chromedriver /usr/local/bin/chromedriver 2>/dev/null || echo "Could not create symlink" && \
-    echo "Final ChromeDriver locations:" && \
-    find /usr -name "*chromedriver*" 2>/dev/null || echo "No chromedriver found in /usr"
-
-# Set working directory
 WORKDIR /app
 
-# Copy requirements and install
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Install chromium, chromedriver and required libs for headless chrome
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      chromium \
+      chromium-driver \
+      ca-certificates wget curl gnupg unzip \
+      fonts-liberation libnss3 libxss1 libasound2 \
+      libatk1.0-0 libatk-bridge2.0-0 libcups2 libxrandr2 \
+      libxcomposite1 libxdamage1 libxfixes3 libxcursor1 libxtst6 \
+      xdg-utils \
+      && rm -rf /var/lib/apt/lists/*
 
-# Copy app code
-COPY . .
+# Immediate verification & helpful debug output (keeps useful messages in image build logs)
+RUN echo "=== Chrome/ChromeDriver verification ===" && \
+    echo "chromium binary:" && which chromium || true && \
+    echo "ls primary locations:" && \
+    ls -la /usr/bin/chromium /usr/lib/chromium/chromedriver /usr/bin/chromedriver 2>/dev/null || true && \
+    echo "find chromedriver files (if any):" && find /usr -name "*chromedriver*" 2>/dev/null || true
 
-# Make startup script executable
-RUN chmod +x start.sh
+# Make symlinks for compatibility (some libs expect google-chrome or /usr/local/bin/chromedriver)
+RUN ln -sf /usr/bin/chromium /usr/bin/google-chrome || true && \
+    if [ -f /usr/bin/chromedriver ]; then ln -sf /usr/bin/chromedriver /usr/local/bin/chromedriver || true; fi || true
 
-# Create non-root user
+# Copy only requirements first for layer caching. Adjust path if requirements.txt is elsewhere.
+COPY Backend/requirements.txt /app/requirements.txt
+
+# Install Python deps
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy application code (adjust if your app is at repo root)
+COPY Backend/ /app/
+
+# If you have a start script that sets up things, ensure it's executable
+# (optional) keep this if you use start.sh, otherwise we'll run gunicorn directly
+RUN if [ -f /app/start.sh ]; then chmod +x /app/start.sh; fi
+
+# Create a non-root user and give ownership of /app
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Expose port
-EXPOSE 5000
+# Expose an informational port (Render sets $PORT at runtime)
+EXPOSE 10000
 
-# Optional health check
+# Optional healthcheck (shell form so $PORT from runtime is expanded)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/api/market_status || exit 1
+  CMD curl -f "http://localhost:${PORT:-5000}/health" || exit 1
 
-# Start app
-CMD ["./start.sh"]
+# Final command:
+# - Use gunicorn as the production server and bind to the runtime $PORT (Render provides $PORT).
+# - IMPORTANT: change "app:app" to the module:variable that creates your Flask app (e.g., main:app, wsgi:app)
+# If you prefer to use start.sh (which should call gunicorn with $PORT), replace the CMD accordingly.
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT} app:app --workers 2 --threads 2"]
