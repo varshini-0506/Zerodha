@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'stock_list_page.dart';
 import 'auth_page.dart';
+import 'auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:async';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,7 +67,80 @@ class StockApp extends StatelessWidget {
           ),
         ),
       ),
-      home: AuthPage(),
+      home: AuthWrapper(),
     );
+  }
+}
+
+class AuthWrapper extends StatefulWidget {
+  @override
+  _AuthWrapperState createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _isLoading = true;
+  bool _isAuthenticated = false;
+  late StreamSubscription<AuthState> _authStateSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthState();
+    _setupAuthListener();
+  }
+
+  @override
+  void dispose() {
+    _authStateSubscription.cancel();
+    super.dispose();
+  }
+
+  void _setupAuthListener() {
+    _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final user = data.session?.user;
+      setState(() {
+        _isAuthenticated = user != null;
+        _isLoading = false;
+      });
+    });
+  }
+
+  Future<void> _checkAuthState() async {
+    // Add a small delay to show loading state
+    await Future.delayed(Duration(milliseconds: 500));
+    
+    final user = AuthService().getCurrentUser();
+    setState(() {
+      _isAuthenticated = user != null;
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: Colors.grey[100],
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.teal),
+              SizedBox(height: 16),
+              Text(
+                'Loading...',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return _isAuthenticated ? StockListPage() : AuthPage();
   }
 }

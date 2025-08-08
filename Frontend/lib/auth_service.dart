@@ -25,4 +25,18 @@ class AuthService {
       'username': username,
     });
   }
+
+  Future<Map<String, dynamic>?> getUserData(String userId) async {
+    try {
+      final response = await _client
+          .from('users')
+          .select()
+          .eq('id', userId)
+          .single();
+      return response;
+    } catch (e) {
+      print('Error fetching user data: $e');
+      return null;
+    }
+  }
 }

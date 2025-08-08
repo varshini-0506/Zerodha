@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
 import 'stock_list_page.dart';
+import 'main.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({Key? key}) : super(key: key);
@@ -45,9 +46,10 @@ class _AuthPageState extends State<AuthPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Logged in successfully!")),
         );
-        Navigator.pushReplacement(
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => StockListPage()),
+          (route) => false,
         );
         // TODO: Navigate to your home/dashboard page
         // Navigator.pushReplacementNamed(context, '/home');
@@ -56,13 +58,24 @@ class _AuthPageState extends State<AuthPage> {
         final userId = response.user?.id;
         if (userId != null) {
           await authService.insertUserData(userId, username);
+          // Auto-login after signup
+          await authService.signIn(email, password);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Signup successful! Welcome!")),
+          );
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => StockListPage()),
+            (route) => false,
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Signup successful! Please verify your email.")),
+          );
+          setState(() {
+            _isLogin = true;
+          });
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Signup successful! Please verify your email.")),
-        );
-        setState(() {
-          _isLogin = true;
-        });
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

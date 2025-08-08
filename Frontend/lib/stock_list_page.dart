@@ -5,6 +5,8 @@ import 'watchlist_page.dart';
 import 'services/stock_service.dart';
 import 'news_page.dart';
 import 'auth_service.dart';
+import 'auth_page.dart';
+import 'main.dart';
 import 'dart:async';
 import 'events_page.dart';
 import 'package:flutter/foundation.dart';
@@ -27,6 +29,10 @@ class _StockListPageState extends State<StockListPage> {
   String errorMessage = '';
   Set<String> wishlistSymbols = {};
   
+  // User data
+  String? userEmail;
+  String? username;
+  
   // Pagination variables
   int currentPage = 1;
   bool isLoadingMore = false;
@@ -41,6 +47,7 @@ class _StockListPageState extends State<StockListPage> {
   void initState() {
     super.initState();
     _initializeApp();
+    _loadUserData();
   }
 
   Future<void> _initializeApp() async {
@@ -145,6 +152,27 @@ class _StockListPageState extends State<StockListPage> {
         print('❌ Error fetching quotes in background: $e');
       }
       // Don't show error to user, just log it
+    }
+  }
+
+  Future<void> _loadUserData() async {
+    final user = AuthService().getCurrentUser();
+    if (user == null) return;
+    
+    try {
+      setState(() {
+        userEmail = user.email;
+      });
+      
+      // Fetch username from database
+      final userData = await AuthService().getUserData(user.id);
+      if (userData != null) {
+        setState(() {
+          username = userData['username'] as String?;
+        });
+      }
+    } catch (e) {
+      print('Error loading user data: $e');
     }
   }
 
@@ -379,7 +407,52 @@ class _StockListPageState extends State<StockListPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: 36),
+            // User Profile Section
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.teal[700]!, Colors.teal[500]!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: 20),
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    child: Icon(
+                      Icons.person,
+                      size: 35,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    username ?? 'User',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    userEmail ?? 'user@example.com',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 14,
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                ],
+              ),
+            ),
+            SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8),
               child: Text('MENU', style: TextStyle(color: Colors.teal[700], fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)),
@@ -418,28 +491,49 @@ class _StockListPageState extends State<StockListPage> {
                 );
               },
             ),
-            ListTile(
-              leading: Icon(Icons.event, color: Colors.deepPurple),
-              title: Text('Events', style: TextStyle(fontWeight: FontWeight.w500)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              tileColor: ModalRoute.of(context)?.settings.name == '/events' ? Colors.teal[50] : null,
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => EventsPage(),
-                    settings: RouteSettings(name: '/events'),
-                  ),
-                );
-              },
-            ),
-            Spacer(),
-            Divider(),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0, left: 20),
-              child: Text('Zerodha Demo App', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-            ),
+                         ListTile(
+               leading: Icon(Icons.event, color: Colors.deepPurple),
+               title: Text('Events', style: TextStyle(fontWeight: FontWeight.w500)),
+               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+               tileColor: ModalRoute.of(context)?.settings.name == '/events' ? Colors.teal[50] : null,
+               onTap: () {
+                 Navigator.pop(context);
+                 Navigator.push(
+                   context,
+                   MaterialPageRoute(
+                     builder: (_) => EventsPage(),
+                     settings: RouteSettings(name: '/events'),
+                   ),
+                 );
+               },
+             ),
+             Spacer(),
+             Divider(),
+             ListTile(
+               leading: Icon(Icons.logout, color: Colors.red),
+               title: Text('Logout', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.red)),
+               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+               onTap: () async {
+                 Navigator.pop(context);
+                 await AuthService().signOut();
+                 // Clear user data
+                 setState(() {
+                   userEmail = null;
+                   username = null;
+                 });
+                 // Navigate back to the root and clear all previous routes
+                 Navigator.pushAndRemoveUntil(
+                   context,
+                   MaterialPageRoute(builder: (context) => AuthWrapper()),
+                   (route) => false,
+                 );
+               },
+             ),
+             SizedBox(height: 16),
+             Padding(
+               padding: const EdgeInsets.only(bottom: 16.0, left: 20),
+               child: Text('Zerodha Demo App', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+             ),
           ],
         ),
       ),
