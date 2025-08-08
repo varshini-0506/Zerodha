@@ -6,10 +6,12 @@ import asyncio
 import json
 import threading
 import os
+import socket
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta, time , date
 import pytz
 import traceback
+from email.utils import parsedate_to_datetime
 
 # Third-party imports
 from flask import Flask, jsonify, request
@@ -29,7 +31,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.common.exceptions import TimeoutException
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 from urllib.parse import urlparse, parse_qs
 
@@ -245,6 +246,74 @@ def get_stock_detail(symbol):
         except Exception as e:
             print(f"Error fetching historical data for {symbol}: {e}")
         
+        # Convert timestamps to IST timezone
+        ist_timezone = pytz.timezone('Asia/Kolkata')
+        
+        # Convert historical data timestamps
+        if historical_data:
+            for candle in historical_data:
+                try:
+                    original_date = candle['date']
+                    
+                    if isinstance(original_date, str):
+                        # Handle string format like "Sun, 01 Jan 2023 18:30:00 GMT"
+                        if 'GMT' in original_date:
+                            gmt_dt = parsedate_to_datetime(original_date)
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                        else:
+                            # Handle ISO format
+                            gmt_dt = datetime.fromisoformat(original_date.replace('Z', '+00:00'))
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                    else:
+                        # Handle datetime object
+                        ist_dt = original_date.astimezone(ist_timezone)
+                    
+                    # Format with day name, date, time and timezone
+                    formatted_date = ist_dt.strftime('%A, %d %b %Y %H:%M:%S %Z')
+                    candle['date'] = formatted_date
+                    
+                except Exception as e:
+                    print(f"Error converting timezone for historical candle {candle}: {e}")
+                    continue
+        
+        # Convert quote data timestamps if they exist
+        if quote_data:
+            # Convert timestamp field
+            if 'timestamp' in quote_data:
+                try:
+                    original_timestamp = quote_data['timestamp']
+                    if isinstance(original_timestamp, str):
+                        if 'GMT' in original_timestamp:
+                            gmt_dt = parsedate_to_datetime(original_timestamp)
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                        else:
+                            gmt_dt = datetime.fromisoformat(original_timestamp.replace('Z', '+00:00'))
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                    else:
+                        ist_dt = original_timestamp.astimezone(ist_timezone)
+                    
+                    quote_data['timestamp'] = ist_dt.strftime('%A, %d %b %Y %H:%M:%S %Z')
+                except Exception as e:
+                    print(f"Error converting quote timestamp: {e}")
+            
+            # Convert last_trade_time field
+            if 'last_trade_time' in quote_data:
+                try:
+                    original_trade_time = quote_data['last_trade_time']
+                    if isinstance(original_trade_time, str):
+                        if 'GMT' in original_trade_time:
+                            gmt_dt = parsedate_to_datetime(original_trade_time)
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                        else:
+                            gmt_dt = datetime.fromisoformat(original_trade_time.replace('Z', '+00:00'))
+                            ist_dt = gmt_dt.astimezone(ist_timezone)
+                    else:
+                        ist_dt = original_trade_time.astimezone(ist_timezone)
+                    
+                    quote_data['last_trade_time'] = ist_dt.strftime('%A, %d %b %Y %H:%M:%S %Z')
+                except Exception as e:
+                    print(f"Error converting last_trade_time: {e}")
+        
         # Compile detailed stock information
         stock_detail = {
             'symbol': instrument['tradingsymbol'],
@@ -259,7 +328,8 @@ def get_stock_detail(symbol):
             'lot_size': instrument['lot_size'],
             'quote': quote_data,
             'historical_data': historical_data,
-            'last_updated': datetime.now().isoformat()
+            'last_updated': datetime.now(ist_timezone).strftime('%A, %d %b %Y %H:%M:%S %Z'),
+            'timezone': 'Asia/Kolkata (IST)'
         }
         
         return jsonify(stock_detail)
@@ -356,6 +426,11 @@ def get_market_status():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for uptime monitoring"""
+    return "OK", 200
 
 @app.route('/api/search', methods=['GET'])
 def search_stocks():
@@ -620,6 +695,7 @@ import socket
 import requests
 from flask import jsonify
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -630,6 +706,7 @@ from kiteconnect import KiteConnect
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 from supabase import create_client
+# Removed ChromeDriver import - using webdriver.Chrome instead
 
 @app.route("/api/refresh_zerodha_token", methods=["POST"])
 def refresh_zerodha_token():
@@ -646,7 +723,7 @@ def refresh_zerodha_token():
 
     driver = None
     try:
-        # Load secrets
+        # Load and validate secrets
         Z_USERNAME = os.getenv("KITE_USERNAME", "").strip()
         Z_PASSWORD = os.getenv("KITE_PASSWORD", "").strip()
         TOTP_SECRET = os.getenv("TOTP_SECRET", "").strip()
@@ -655,10 +732,30 @@ def refresh_zerodha_token():
         SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
         SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 
-        # Check TOTP secret
-        pyotp.TOTP(TOTP_SECRET).now()
+        # Validate all required environment variables
+        missing_vars = []
+        if not Z_USERNAME: missing_vars.append("KITE_USERNAME")
+        if not Z_PASSWORD: missing_vars.append("KITE_PASSWORD")
+        if not TOTP_SECRET: missing_vars.append("TOTP_SECRET")
+        if not API_KEY: missing_vars.append("KITE_API_KEY")
+        if not API_SECRET: missing_vars.append("KITE_API_SECRET")
+        if not SUPABASE_URL: missing_vars.append("SUPABASE_URL")
+        if not SUPABASE_KEY: missing_vars.append("SUPABASE_KEY")
 
-        # ---------- Network Debug ----------
+        if missing_vars:
+            result["error"] = f"Missing required environment variables: {', '.join(missing_vars)}"
+            result["success"] = False
+            return jsonify(result)
+
+        # Validate TOTP secret early
+        try:
+            pyotp.TOTP(TOTP_SECRET).now()
+        except Exception as e:
+            result["error"] = f"Invalid TOTP_SECRET: {str(e)}"
+            result["success"] = False
+            return jsonify(result)
+
+        # Network diagnostics
         debug_msg = []
         try:
             ip = socket.gethostbyname("kite.zerodha.com")
@@ -671,17 +768,16 @@ def refresh_zerodha_token():
             debug_msg.append(f"Requests status: {r.status_code}")
         except Exception as e:
             debug_msg.append(f"Requests FAIL: {e}")
-
         result["network_check"] = " | ".join(debug_msg)
 
-        # ---------- Setup Supabase ----------
+        # Supabase client
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-        # ---------- Setup Chrome (optimized for Chromium) ----------
+        # Chrome Options
         chrome_options = Options()
-        chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium")
-
-        chrome_options.add_argument("--headless=new")
+        chrome_options.set_capability("browserName", "chrome")
+        chrome_options.binary_location = "/usr/bin/chromium"
+        chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-dev-shm-usage")
@@ -690,23 +786,55 @@ def refresh_zerodha_token():
         chrome_options.add_argument("--dns-prefetch-disable")
         chrome_options.add_argument("--window-size=1920,1080")
 
-
-        driver = webdriver.Chrome(options=chrome_options)
+        # Try multiple ChromeDriver paths
+        chromedriver_paths = [
+            "/usr/lib/chromium/chromedriver",  # Primary Chromium location
+            "/usr/local/bin/chromedriver",     # Symlink location
+            "/usr/bin/chromedriver",           # Alternative location
+            os.getenv('CHROMEDRIVER_PATH'),    # Environment variable
+            os.getenv('SELENIUM_DRIVER_PATH')  # Selenium environment variable
+        ]
+        
+        driver = None
+        chromedriver_path = None
+        
+        for path in chromedriver_paths:
+            if path and os.path.exists(path):
+                try:
+                    print(f"Trying ChromeDriver at: {path}")
+                    service = Service(executable_path=path)
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                    chromedriver_path = path
+                    print(f"✅ ChromeDriver created successfully with path: {path}")
+                    break
+                except Exception as e:
+                    print(f"❌ ChromeDriver failed at {path}: {e}")
+                    continue
+        
+        if driver is None:
+            print("❌ ChromeDriver not found in any location")
+            print("Available ChromeDriver locations:")
+            for path in chromedriver_paths:
+                if path:
+                    print(f"  - {path}: {'✅ EXISTS' if os.path.exists(path) else '❌ NOT FOUND'}")
+            result["error"] = "ChromeDriver not found in any location. Please check Dockerfile installation."
+            result["success"] = False
+            return jsonify(result)
         driver.set_page_load_timeout(60)
         wait = WebDriverWait(driver, 40)
 
-        # ---------- Step 1: Login ----------
+        # Step 1: Go to login
         login_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={API_KEY}"
         driver.get(login_url)
 
-        # ---------- Step 2: Username & Password ----------
+        # Step 2: Username and password
         userid_field = wait.until(EC.presence_of_element_located((By.ID, "userid")))
         userid_field.clear()
         userid_field.send_keys(Z_USERNAME)
         driver.find_element(By.ID, "password").send_keys(Z_PASSWORD)
         driver.find_element(By.XPATH, "//button[@type='submit']").click()
 
-        # ---------- Step 3: TOTP ----------
+        # Step 3: TOTP page
         try:
             wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "form.twofa-form input#userid")))
             totp_field = driver.find_element(By.CSS_SELECTOR, "form.twofa-form input#userid")
@@ -715,12 +843,11 @@ def refresh_zerodha_token():
             totp_field.send_keys(totp)
             driver.find_element(By.CSS_SELECTOR, "form.twofa-form button[type='submit']").click()
         except TimeoutException:
-            screenshot_bytes = driver.get_screenshot_as_png()
-            result["debug_screenshot"] = base64.b64encode(screenshot_bytes).decode()
+            result["debug_screenshot"] = base64.b64encode(driver.get_screenshot_as_png()).decode()
             result["debug_html"] = driver.page_source
-            raise TimeoutException("TOTP form did not load (possibly wrong flow).")
+            raise TimeoutException("TOTP form did not load.")
 
-        # ---------- Step 4: Request Token ----------
+        # Step 4: Wait for redirect with request_token
         wait.until(lambda d: "request_token" in d.current_url)
         redirected_url = driver.current_url
         parsed = urlparse(redirected_url)
@@ -728,18 +855,19 @@ def refresh_zerodha_token():
         if not request_token:
             raise Exception("Request token not found in redirected URL.")
 
-        # ---------- Step 5: Access Token ----------
+        # Step 5: Get access token from Kite
         kite = KiteConnect(api_key=API_KEY)
         data = kite.generate_session(request_token, api_secret=API_SECRET)
         access_token = data["access_token"]
 
-        # ---------- Step 6: Store in Supabase ----------
+        # Step 6: Save to Supabase
         response = supabase.table("api_tokens").upsert({
             "service": "zerodha",
             "access_token": access_token,
             "created_at": datetime.now().isoformat()
         }, on_conflict="service").execute()
 
+        # Final result
         result["success"] = True
         result["access_token"] = access_token
         result["request_token"] = request_token
@@ -750,8 +878,7 @@ def refresh_zerodha_token():
     except Exception as e:
         if driver:
             try:
-                screenshot_bytes = driver.get_screenshot_as_png()
-                result["debug_screenshot"] = base64.b64encode(screenshot_bytes).decode()
+                result["debug_screenshot"] = base64.b64encode(driver.get_screenshot_as_png()).decode()
                 result["debug_html"] = driver.page_source
             except:
                 pass
@@ -797,6 +924,203 @@ def get_combined_stock_events(symbol):
 
     except Exception as e:
         return jsonify({"error": "Failed to fetch stock events", "details": str(e)}), 500
+
+def fetch_daily_full(instrument_token, start_date, end_date):
+    """
+    Fetch daily bars in 100-day chunks to ensure full coverage.
+    """
+    delta = timedelta(days=100)
+    current_start = start_date
+    all_bars = []
+    while current_start <= end_date:
+        current_end = min(current_start + delta, end_date)
+        try:
+            bars = kite.historical_data(
+                instrument_token=instrument_token,
+                from_date=current_start,
+                to_date=current_end,
+                interval='day'
+            ) or []
+        except Exception as e:
+            print(f"Error fetching {current_start} to {current_end}: {e}")
+            bars = []
+        all_bars.extend(bars)
+        current_start = current_end + timedelta(days=1)
+    # Deduplicate by date and sort
+    unique = {}
+    for bar in all_bars:
+        dt = bar['date'].date() if hasattr(bar['date'], 'date') \
+             else datetime.fromisoformat(str(bar['date']).replace('Z','+00:00')).date()
+        unique[dt] = bar
+    return [unique[dt] for dt in sorted(unique.keys())]
+
+def extract_last_trading_days(daily_candles, start_date, end_date):
+    """
+    From a complete daily series, return one candle per calendar month,
+    selecting the last available trading day in each month.
+    """
+    parsed = []
+    for candle in daily_candles:
+        if hasattr(candle['date'], 'date'):
+            dt = candle['date'].date()
+        else:
+            dt = datetime.fromisoformat(str(candle['date']).replace('Z','+00:00')).date()
+        if start_date <= dt <= end_date:
+            parsed.append((dt, candle))
+
+    parsed.sort(key=lambda x: x[0])
+
+    last_by_month = {}
+    for dt, candle in parsed:
+        key = (dt.year, dt.month)
+        last_by_month[key] = candle
+
+    return [ last_by_month[ym] for ym in sorted(last_by_month.keys()) ]
+
+@app.route('/api/stocks/<symbol>/historical', methods=['GET'])
+def get_stock_historical_data(symbol):
+    """Get historical data for a specific stock with custom date range and frequency."""
+    # 1. Read & validate query parameters
+    start_date_str = request.args.get('start_date')
+    end_date_str   = request.args.get('end_date')
+    freq_input     = request.args.get('frequency', 'day').lower()
+
+    if not start_date_str or not end_date_str:
+        return jsonify({
+            "error": "start_date and end_date are required. Format: YYYY-MM-DD"
+        }), 400
+
+    freq_map = {
+        'day':'day','daily':'day',
+        'week':'week','weekly':'week',
+        'month':'day','monthly':'day'
+    }
+    if freq_input not in freq_map:
+        return jsonify({
+            "error": f"Invalid frequency. Must be one of: {', '.join(freq_map)}"
+        }), 400
+
+    # 2. Parse & sanity‐check dates
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date   = datetime.strptime(end_date_str,   '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({"error":"Invalid date format. Use YYYY-MM-DD."}), 400
+
+    if start_date > end_date:
+        return jsonify({"error":"start_date cannot be after end_date"}), 400
+    if end_date > datetime.now().date():
+        return jsonify({"error":"end_date cannot be in the future"}), 400
+
+    # 3. Lookup instrument_token
+    instruments = get_all_instruments()
+    instrument = next((i for i in instruments if i['tradingsymbol'] == symbol.upper()), None)
+    if not instrument:
+        return jsonify({"error": f"Stock '{symbol}' not found"}), 404
+
+    # 4. Fetch & filter data
+    interval = freq_map[freq_input]
+    try:
+        if freq_input in ('month','monthly'):
+            # Fetch full daily series then extract last trading-day of each month
+            raw_daily = fetch_daily_full(
+                instrument['instrument_token'],
+                start_date, end_date
+            )
+            data = extract_last_trading_days(raw_daily, start_date, end_date)
+        else:
+            # daily/weekly: fetch directly at requested interval
+            raw = kite.historical_data(
+                instrument_token=instrument['instrument_token'],
+                from_date=start_date,
+                to_date=end_date,
+                interval=interval
+            ) or []
+            data = []
+            for candle in raw:
+                try:
+                    if hasattr(candle['date'], 'date'):
+                        dt = candle['date'].date()
+                    else:
+                        date_str = str(candle['date'])
+                        if 'GMT' in date_str:
+                            dt = parsedate_to_datetime(date_str).date()
+                        else:
+                            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00')).date()
+                    if start_date <= dt <= end_date:
+                        data.append(candle)
+                except Exception as e:
+                    print(f"Error processing candle: {e}")
+                    continue
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error":f"Failed to fetch data: {e}"}), 500
+
+    # 5. Convert timestamps to local timezone (IST) with day name
+    ist_timezone = pytz.timezone('Asia/Kolkata')
+    
+    for candle in data:
+        try:
+            # Parse the original date
+            original_date = candle['date']
+            
+            if isinstance(original_date, str):
+                # Handle string format like "Sun, 01 Jan 2023 18:30:00 GMT"
+                if 'GMT' in original_date:
+                    # Parse GMT date and convert to IST
+                    gmt_dt = parsedate_to_datetime(original_date)
+                    ist_dt = gmt_dt.astimezone(ist_timezone)
+                else:
+                    # Handle ISO format
+                    gmt_dt = datetime.fromisoformat(original_date.replace('Z', '+00:00'))
+                    ist_dt = gmt_dt.astimezone(ist_timezone)
+            else:
+                # Handle datetime object
+                ist_dt = original_date.astimezone(ist_timezone)
+            
+            # Format with day name, date, time and timezone
+            # Format: "Monday, 02 Jan 2023 00:00:00 IST"
+            formatted_date = ist_dt.strftime('%A, %d %b %Y %H:%M:%S %Z')
+            
+            # Update the date field with IST timestamp including day name
+            candle['date'] = formatted_date
+            
+        except Exception as e:
+            print(f"Error converting timezone for candle {candle}: {e}")
+            # Keep original if conversion fails
+            continue
+
+    # 6. Build & return response
+    resp = {
+        'symbol': instrument['tradingsymbol'],
+        'name': instrument.get('name',''),
+        'instrument_token': instrument['instrument_token'],
+        'start_date': start_date_str,
+        'end_date': end_date_str,
+        'frequency': freq_input,
+        'interval': interval,
+        'data_points': len(data),
+        'historical_data': data,
+        'last_updated': datetime.now(ist_timezone).strftime('%A, %d %b %Y %H:%M:%S %Z'),
+        'timezone': 'Asia/Kolkata (IST)'
+    }
+
+    if freq_input in ('month','monthly'):
+        resp['note'] = ('Monthly data shows the last trading-day of each month '
+                        '(or previous trading-day if month-end was a holiday/weekend).')
+
+    if not data:
+        resp['debug_info'] = {
+            'message': 'No data available for the specified range.',
+            'suggestions': [
+                'Try a more recent date range.',
+                'Ensure dates fall on trading days (not weekends/holidays).',
+                'Verify the stock symbol.',
+                'Avoid very distant past ranges.'
+            ]
+        }
+
+    return jsonify(resp)
 
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
@@ -881,6 +1205,7 @@ def background_tick_sender():
             ticks_list = list(latest_ticks.values())
             socketio.emit('tick_data', {'data': ticks_list, 'timestamp': datetime.now().isoformat()})
         time.sleep(0.1)
+        
 
 @socketio.on('connect')
 def handle_connect():
@@ -889,10 +1214,21 @@ def handle_connect():
         "timestamp": datetime.now().isoformat(),
         "total_instruments": len(get_all_instruments())
     })
+HEARTBEAT_INTERVAL = 20  # seconds
 
+def background_heartbeat():
+    while True:
+        socketio.emit('heartbeat', {'message': 'ping', 'timestamp': datetime.now().isoformat()})
+        time.sleep(HEARTBEAT_INTERVAL)
+
+@socketio.on('ping_from_client')
+def on_client_ping():
+    emit('pong_from_server', {'message': 'pong', 'timestamp': datetime.now().isoformat()})
+    
 if __name__ == "__main__":
     print("Starting Zerodha WebSocket streamer...")
     # Start background tasks using SocketIO's method
     socketio.start_background_task(start_kite_ws)
     socketio.start_background_task(background_tick_sender)
+    socketio.start_background_task(background_heartbeat)
     socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000))) 

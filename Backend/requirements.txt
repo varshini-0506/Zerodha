@@ -1,17 +1,50 @@
-flask
-flask-cors
-kiteconnect
-python-dotenv
-websockets
+# Core Flask and Web Framework
+flask>=2.3.0
+flask-cors>=4.0.0
+flask-socketio>=5.3.0
+gunicorn>=21.0.0
+
+# Async and WebSocket Support
+gevent>=23.0.0
+gevent-websocket>=0.10.1
+websockets>=11.0.0
+asyncio
+
+# Zerodha API Integration
+kiteconnect>=4.1.0
+
+# Database and Authentication
+supabase>=2.0.0
+pyotp>=2.8.0
+
+# Web Scraping and Browser Automation
+selenium>=4.15.0
+
+# HTTP and Network Requests
 requests>=2.31.0
 urllib3>=2.0.0
-pytz
-selenium
-pyotp
-supabase
-webdriver-manager 
-gunicorn
-flask-socketio
-gevent
-gevent-websocket
+
+# Environment and Configuration
+python-dotenv>=1.0.0
+
+# Date and Time Handling
+pytz>=2023.3
+
+# DNS Resolution (required for gevent)
 dnspython==2.2.1
+
+# Standard Library Dependencies (included with Python)
+# - json
+# - os
+# - threading
+# - typing
+# - datetime
+# - traceback
+# - base64
+# - socket
+# - xml.etree
+# - subprocess
+# - sys
+# - time
+# - logging
+# - webbrowser
