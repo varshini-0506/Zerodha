@@ -6,6 +6,28 @@
 -keep class io.flutter.**  { *; }
 -keep class io.flutter.plugins.**  { *; }
 
+# HTTP client rules
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+-dontwarn okhttp3.**
+
+# Network related rules
+-keep class java.net.** { *; }
+-keep class javax.net.** { *; }
+
+# Keep JSON parsing classes
+-keepclassmembers class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+
+# Keep HTTP package
+-keep class dart.io.** { *; }
+-keep class package:http.** { *; }
+
+# Keep WebSocket classes
+-keep class dart.async.** { *; }
+-keep class dart.core.** { *; }
+
 # Keep your model classes
 -keep class com.example.frontend.models.** { *; }
 
@@ -18,6 +40,15 @@
 # WebSocket related
 -keep class io.socket.** { *; }
 -keep class com.squareup.okhttp.** { *; }
+
+# Google Play Core classes (required for Flutter)
+-keep class com.google.android.play.core.** { *; }
+-keep class com.google.android.play.core.splitcompat.** { *; }
+-keep class com.google.android.play.core.splitinstall.** { *; }
+-keep class com.google.android.play.core.tasks.** { *; }
+-keep class com.google.android.play.core.appupdate.** { *; }
+-keep class com.google.android.play.core.install.** { *; }
+-keep class com.google.android.play.core.review.** { *; }
 
 # Keep native methods
 -keepclasseswithmembernames class * {

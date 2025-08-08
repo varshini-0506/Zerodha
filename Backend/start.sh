@@ -4,16 +4,15 @@ echo "=== Starting Zerodha Backend ==="
 echo "Current directory: $(pwd)"
 echo "Environment variables:"
 echo "CHROME_BIN: $CHROME_BIN"
-echo "CHROMEDRIVER_BIN: $CHROMEDRIVER_BIN"
 echo "DISPLAY: $DISPLAY"
 
-echo "=== Checking Chrome binaries ==="
+echo "=== Checking Chrome binary ==="
+ls -la /usr/bin/chromium || echo "Chromium not found"
 ls -la /usr/bin/google-chrome || echo "Google Chrome not found"
-ls -la /usr/local/bin/chromedriver || echo "ChromeDriver not found"
 
 echo "=== Checking which commands ==="
+which chromium || echo "chromium not found"
 which google-chrome || echo "google-chrome not found"
-which chromedriver || echo "chromedriver not found"
 
 # Start virtual display for Selenium
 echo "=== Starting virtual display ==="
@@ -32,5 +31,8 @@ else
 fi
 
 echo "=== Starting Flask application ==="
+# Set default port if not provided
+PORT=${PORT:-5000}
+echo "Using port: $PORT"
 # Start the Flask application
 exec gunicorn --worker-class gevent --workers 1 --bind 0.0.0.0:$PORT app:app 

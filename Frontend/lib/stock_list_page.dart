@@ -31,7 +31,7 @@ class _StockListPageState extends State<StockListPage> {
   int currentPage = 1;
   bool isLoadingMore = false;
   bool hasMoreData = true;
-  static const int pageSize = 50;
+  static const int pageSize = 25; // Reduced from 50 for better performance
 
   List<String> sectors = ['All', 'Technology', 'Banking & Finance', 'Healthcare', 'Automotive', 'Oil & Gas', 'Power & Energy', 'Others'];
   List<String> ratings = ['All', 'Buy', 'Hold', 'Sell'];
@@ -81,11 +81,11 @@ class _StockListPageState extends State<StockListPage> {
         print('Loaded ${popularStocks.length} popular stocks');
       }
       
-      // Load only first page of stocks initially (reduced from 100 to 50)
+      // Load only first page of stocks initially (reduced from 50 to 25)
       if (kDebugMode) {
         print('Loading initial stocks...');
       }
-      final stocksData = await StockService.getStocks(page: 1, limit: 50);
+      final stocksData = await StockService.getStocks(page: 1, limit: 25);
       final stocks = (stocksData['stocks'] as List)
           .map((json) => Stock.fromJson(json))
           .toList();
@@ -93,23 +93,22 @@ class _StockListPageState extends State<StockListPage> {
         print('Loaded ${stocks.length} initial stocks');
       }
 
-      // Combine and fetch quote data for each stock
+      // Combine stocks
       final allStocksCombined = [...popularStocks, ...stocks];
       if (kDebugMode) {
-        print('Fetching quotes for ${allStocksCombined.length} stocks...');
+        print('Combined ${allStocksCombined.length} stocks');
       }
-      final stocksWithQuotes = await _fetchQuotesForStocks(allStocksCombined);
-      if (kDebugMode) {
-        print('Successfully loaded ${stocksWithQuotes.length} stocks with quotes');
-      }
-
+      
+      // Show stocks immediately without quotes, then update with quotes
       setState(() {
-        allStocks = stocksWithQuotes;
-        filteredStocks = allStocks;
+        allStocks = allStocksCombined;
+        filteredStocks = allStocksCombined;
         isLoading = false;
       });
 
-      _applyFilters();
+      // Fetch quotes in background
+      _fetchQuotesInBackground(allStocksCombined);
+
     } catch (e) {
       if (kDebugMode) {
         print('Error in _loadStocks: $e');
@@ -119,6 +118,33 @@ class _StockListPageState extends State<StockListPage> {
         hasError = true;
         errorMessage = e.toString();
       });
+    }
+  }
+
+  // New method to fetch quotes in background
+  Future<void> _fetchQuotesInBackground(List<Stock> stocks) async {
+    try {
+      if (kDebugMode) {
+        print(' Fetching quotes in background for ${stocks.length} stocks...');
+      }
+      
+      final stocksWithQuotes = await _fetchQuotesForStocks(stocks);
+      
+      setState(() {
+        allStocks = stocksWithQuotes;
+        filteredStocks = stocksWithQuotes;
+      });
+      
+      _applyFilters();
+      
+      if (kDebugMode) {
+        print('✅ Successfully updated ${stocksWithQuotes.length} stocks with quotes');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error fetching quotes in background: $e');
+      }
+      // Don't show error to user, just log it
     }
   }
 

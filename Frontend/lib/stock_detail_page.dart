@@ -195,25 +195,8 @@ class _StockDetailPageState extends State<StockDetailPage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        AnimatedSwitcher(
-                          duration: Duration(milliseconds: 300),
-                          transitionBuilder: (Widget child, Animation<double> animation) {
-                            return ScaleTransition(
-                              scale: animation,
-                              child: child,
-                            );
-                          },
-                          child: Text(
-                            '₹${(_stock.lastPrice ?? 0.0).toStringAsFixed(2)}',
-                            key: ValueKey(_stock.lastPrice),
-                            style: const TextStyle(
-                              fontSize: 38,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                        ),
+                        // Smooth number animation for price changes
+                        _buildAnimatedPrice(),
                         SizedBox(height: 4),
                         if (_stock.quote?['last_trade_time'] != null)
                           Text(
@@ -293,7 +276,10 @@ class _StockDetailPageState extends State<StockDetailPage> {
               Divider(thickness: 1.2, color: Colors.teal[100]),
               const SizedBox(height: 18),
               // Performance Summary
-              _buildPerformanceSection(),
+              KeyedSubtree(
+                key: ValueKey('performance_${_stock.lastPrice}_${_stock.quote?['change']}_${_stock.quote?['change_percent']}'),
+                child: _buildPerformanceSection(),
+              ),
             ],
           ),
         ),
@@ -302,7 +288,7 @@ class _StockDetailPageState extends State<StockDetailPage> {
   }
 
   Widget _buildPerformanceSection() {
-    // Prefer backend-provided change and change_percent, fallback to calculated if needed
+    // Use live tick data for change calculations
     final double? change = _stock.quote?['change']?.toDouble() ??
         (_stock.lastPrice != null && _stock.ohlc?['close'] != null
             ? _stock.lastPrice! - _stock.ohlc!['close']
@@ -311,8 +297,7 @@ class _StockDetailPageState extends State<StockDetailPage> {
         (_stock.lastPrice != null && _stock.ohlc?['close'] != null && _stock.ohlc!['close'] != 0
             ? ((_stock.lastPrice! - _stock.ohlc!['close']) / _stock.ohlc!['close']) * 100
             : null);
-    final isPositive = (changePercent ?? 0.0) >= 0;
-    final changeColor = isPositive ? Colors.green : Colors.red;
+    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -343,23 +328,29 @@ class _StockDetailPageState extends State<StockDetailPage> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: changeColor.withOpacity(0.08),
+                    color: Colors.teal.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: changeColor.withOpacity(0.18)),
+                    border: Border.all(color: Colors.teal.withOpacity(0.18)),
                   ),
                   padding: EdgeInsets.symmetric(vertical: 18),
                   child: Column(
                     children: [
-                      Icon(Icons.trending_up, color: changeColor, size: 28),
+                      Icon(Icons.trending_up, color: Colors.teal[600], size: 28),
                       SizedBox(height: 8),
                       Text(
                         'Change',
                         style: TextStyle(fontSize: 15, color: Colors.grey[600]),
                       ),
                       SizedBox(height: 4),
-                      Text(
-                        '₹${change != null ? change.toStringAsFixed(2) : 'N/A'}',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: changeColor),
+                      TweenAnimationBuilder<double>(
+                        duration: Duration(milliseconds: 500),
+                        tween: Tween(begin: 0.0, end: change ?? 0.0),
+                        builder: (context, animatedValue, child) {
+                          return Text(
+                            '₹${animatedValue.toStringAsFixed(2)}',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal[800]),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -369,23 +360,29 @@ class _StockDetailPageState extends State<StockDetailPage> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: changeColor.withOpacity(0.08),
+                    color: Colors.teal.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: changeColor.withOpacity(0.18)),
+                    border: Border.all(color: Colors.teal.withOpacity(0.18)),
                   ),
                   padding: EdgeInsets.symmetric(vertical: 18),
                   child: Column(
                     children: [
-                      Icon(Icons.percent, color: changeColor, size: 28),
+                      Icon(Icons.percent, color: Colors.teal[600], size: 28),
                       SizedBox(height: 8),
                       Text(
                         'Change %',
                         style: TextStyle(fontSize: 15, color: Colors.grey[600]),
                       ),
                       SizedBox(height: 4),
-                      Text(
-                        '${changePercent != null ? (changePercent >= 0 ? '+' : '') + changePercent.toStringAsFixed(2) : 'N/A'}%',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: changeColor),
+                      TweenAnimationBuilder<double>(
+                        duration: Duration(milliseconds: 500),
+                        tween: Tween(begin: 0.0, end: changePercent ?? 0.0),
+                        builder: (context, animatedValue, child) {
+                          return Text(
+                            '${animatedValue >= 0 ? '+' : ''}${animatedValue.toStringAsFixed(2)}%',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal[800]),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -452,5 +449,24 @@ class _StockDetailPageState extends State<StockDetailPage> {
     );
   }
 
-
+  Widget _buildAnimatedPrice() {
+    final double currentPrice = _stock.lastPrice ?? 0.0;
+    final double previousPrice = _stock.ohlc?['close'] ?? currentPrice;
+    
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 500),
+      tween: Tween(begin: previousPrice, end: currentPrice),
+      builder: (context, animatedValue, child) {
+        return Text(
+          '₹${animatedValue.toStringAsFixed(2)}',
+          style: const TextStyle(
+            fontSize: 38,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            letterSpacing: 1.2,
+          ),
+        );
+      },
+    );
+  }
 } 

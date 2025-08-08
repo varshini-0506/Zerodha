@@ -27,7 +27,7 @@ subprojects {
         }
         if (project.hasProperty('kotlin')) {
             kotlin {
-                jvmToolchain(21)
+                jvmToolchain(17) // Fixed: Changed from 21 to 17
             }
         }
     }

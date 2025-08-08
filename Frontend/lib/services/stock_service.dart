@@ -8,15 +8,15 @@ class StockService {
   // Deployed backend URL
   static const String baseUrl = 'https://zerodha-ay41.onrender.com/api';
   
-  // HTTP client with optimized configuration for release builds
+  // HTTP client with optimized configuration for mobile networks
   static final http.Client _client = http.Client();
   
-  // Optimized timeout duration for release builds
-  static const Duration _timeout = Duration(seconds: 15); // Reduced from 30s
+  // Increased timeout for mobile networks
+  static const Duration _timeout = Duration(seconds: 30);
   
   // Connection pooling and retry configuration
-  static const int _maxRetries = 2;
-  static const Duration _retryDelay = Duration(seconds: 1);
+  static const int _maxRetries = 3;
+  static const Duration _retryDelay = Duration(seconds: 2);
   
   // Get all stocks with pagination and search
   static Future<Map<String, dynamic>> getStocks({
@@ -131,7 +131,7 @@ class StockService {
     }
   }
 
-  // Get batch quotes for multiple stocks (PERFORMANCE OPTIMIZATION)
+  // Optimized batch quotes with better error handling
   static Future<Map<String, dynamic>> getBatchQuotes(List<String> symbols) async {
     return _retryRequest(() async {
       try {
@@ -142,9 +142,16 @@ class StockService {
           print('Symbols: $symbols');
         }
         
+        // Add headers for better mobile compatibility
+        final headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Connection': 'keep-alive',
+        };
+        
         final response = await _client.post(
           uri,
-          headers: {'Content-Type': 'application/json'},
+          headers: headers,
           body: json.encode({'symbols': symbols}),
         ).timeout(_timeout);
         
