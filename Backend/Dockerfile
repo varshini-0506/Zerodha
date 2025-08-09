@@ -26,10 +26,15 @@ RUN apt-get update && \
 RUN useradd -m -u 1000 appuser
 
 # Fix ChromeDriver permissions for non-root user
-RUN chmod +x /usr/lib/chromium/chromedriver && \
-    chown appuser:appuser /usr/lib/chromium/chromedriver && \
-    chmod +x /usr/bin/chromium && \
-    chown appuser:appuser /usr/bin/chromium
+
+#RUN chmod +x /usr/lib/chromium/chromedriver && \
+#    chown appuser:appuser /usr/lib/chromium/chromedriver && \
+#    chmod +x /usr/bin/chromium && \
+#    chown appuser:appuser /usr/bin/chromium
+
+RUN chmod +x /usr/bin/chromedriver && chown appuser:appuser /usr/bin/chromedriver && \
+    chmod +x /usr/bin/chromium && chown appuser:appuser /usr/bin/chromium
+
 
 # Make symlinks for compatibility and ensure they're owned by appuser
 RUN ln -sf /usr/bin/chromium /usr/bin/google-chrome && \
