@@ -54,68 +54,102 @@ class _WatchlistPageState extends State<WatchlistPage> {
     }
   }
 
-  Future<void> _removeFromWishlist(Stock stock) async {
-    final user = AuthService().getCurrentUser();
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please log in to manage your wishlist.')),
-      );
-      return;
-    }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Remove from Wishlist',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-        ),
-        content: Container(
-          width: double.maxFinite,
-          child: Text(
-            'Are you sure you want to remove ${stock.symbol} from your wishlist?',
-            style: TextStyle(fontSize: 16),
-          ),
-        ),
-        contentPadding: EdgeInsets.fromLTRB(24, 20, 24, 0),
-        actionsPadding: EdgeInsets.fromLTRB(16, 8, 16, 16),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.grey[600],
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-            child: Text('Cancel', style: TextStyle(fontSize: 16)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: Text('Yes', style: TextStyle(fontSize: 16)),
-          ),
-        ],
-      ),
+  Future _removeFromWishlist(Stock stock) async {
+  final user = AuthService().getCurrentUser();
+  if (user == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Please log in to manage your wishlist.')),
     );
-    if (confirmed != true) return;
-    try {
-      await StockService.removeFromWishlist(userId: user.id, symbol: stock.symbol);
+    return;
+  }
+  
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      
+      title: Text(
+        'Remove from Wishlist',
+        style: TextStyle(
+          fontSize: 20, 
+          fontWeight: FontWeight.w600,
+          color: Colors.grey[800],
+        ),
+      ),
+      
+      // Fixed content with minimal padding
+      content: Text(
+        'Are you sure you want to remove ${stock.symbol} from your wishlist?',
+        style: TextStyle(fontSize: 16, color: Colors.grey),
+      ),
+      
+      // Key fix: Minimal padding between content and actions
+      contentPadding: EdgeInsets.fromLTRB(24, 20, 24, 12), // Reduced bottom padding
+      actionsPadding: EdgeInsets.fromLTRB(24, 0, 24, 16),   // Reduced top padding
+      
+      actions: [
+        // Cancel button
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.grey,
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            minimumSize: Size(80, 40),
+          ),
+          child: Text(
+            'Cancel', 
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          ),
+        ),
+        
+        // Remove button (red color for destructive action)
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            minimumSize: Size(80, 40),
+            elevation: 2,
+          ),
+          child: Text(
+            'Remove', 
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
+  );
+  
+  if (confirmed != true) return;
+  
+  try {
+    await StockService.removeFromWishlist(userId: user.id, symbol: stock.symbol);
+    if (mounted) {
       setState(() {
         wishlistStocks.removeWhere((s) => s.symbol == stock.symbol);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${stock.symbol} removed from wishlist!')),
+        SnackBar(
+          content: Text('${stock.symbol} removed from wishlist!'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
-    } catch (e) {
+    }
+  } catch (e) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to remove from wishlist: $e')),
+        SnackBar(
+          content: Text('Failed to remove from wishlist: $e'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {

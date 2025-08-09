@@ -387,80 +387,121 @@ class _StockListPageState extends State<StockListPage> {
     }
   }
 
-  Future<void> _confirmAndToggleWishlist(Stock stock) async {
-    final user = AuthService().getCurrentUser();
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please log in to manage your wishlist.')),
-      );
-      return;
-    }
-    final isWishlisted = wishlistSymbols.contains(stock.symbol);
-    final action = isWishlisted ? 'remove' : 'add';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          '${action == 'add' ? 'Add to' : 'Remove from'} Wishlist',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-        ),
-        content: Container(
-          width: double.maxFinite,
-          child: Text(
-            'Are you sure you want to ${action == 'add' ? 'add' : 'remove'} ${stock.symbol} ${action == 'add' ? 'to' : 'from'} your wishlist?',
-            style: TextStyle(fontSize: 16),
-          ),
-        ),
-        contentPadding: EdgeInsets.fromLTRB(24, 20, 24, 0),
-        actionsPadding: EdgeInsets.fromLTRB(16, 8, 16, 16),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.grey[600],
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-            child: Text('Cancel', style: TextStyle(fontSize: 16)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.teal,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: Text('Yes', style: TextStyle(fontSize: 16)),
-          ),
-        ],
-      ),
+  Future _confirmAndToggleWishlist(Stock stock) async {
+  final user = AuthService().getCurrentUser();
+  if (user == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Please log in to manage your wishlist.')),
     );
-    if (confirmed != true) return;
-    try {
-      if (isWishlisted) {
-        await StockService.removeFromWishlist(userId: user.id, symbol: stock.symbol);
+    return;
+  }
+  
+  final isWishlisted = wishlistSymbols.contains(stock.symbol);
+  final action = isWishlisted ? 'remove' : 'add';
+  
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      
+      title: Text(
+        '${action == 'add' ? 'Add to' : 'Remove from'} Wishlist',
+        style: TextStyle(
+          fontSize: 20, 
+          fontWeight: FontWeight.w600,
+          color: Colors.grey[800],
+        ),
+      ),
+      
+      // Reduced content with minimal padding
+      content: Text(
+        'Are you sure you want to ${action == 'add' ? 'add' : 'remove'} ${stock.symbol} ${action == 'add' ? 'to' : 'from'} your wishlist?',
+        style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+      ),
+      
+      // Key fix: Minimal padding between content and actions
+      contentPadding: EdgeInsets.fromLTRB(24, 20, 24, 12), // Reduced bottom padding from 0 to 12
+      actionsPadding: EdgeInsets.fromLTRB(24, 0, 24, 16),   // Reduced top padding from 8 to 0
+      
+      actions: [
+        // Cancel button
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.grey[600],
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            minimumSize: Size(80, 40),
+          ),
+          child: Text(
+            'Cancel', 
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          ),
+        ),
+        
+        // Confirm button
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: action == 'add' ? Colors.teal : Colors.red,
+            foregroundColor: Colors.white,
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            minimumSize: Size(80, 40),
+            elevation: 2,
+          ),
+          child: Text(
+            'Yes', 
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
+  );
+  
+  if (confirmed != true) return;
+  
+  try {
+    if (isWishlisted) {
+      await StockService.removeFromWishlist(userId: user.id, symbol: stock.symbol);
+      if (mounted) {
         setState(() {
           wishlistSymbols.remove(stock.symbol);
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${stock.symbol} removed from wishlist!')),
+          SnackBar(
+            content: Text('${stock.symbol} removed from wishlist!'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
-      } else {
-        await StockService.addToWishlist(userId: user.id, symbol: stock.symbol);
+      }
+    } else {
+      await StockService.addToWishlist(userId: user.id, symbol: stock.symbol);
+      if (mounted) {
         setState(() {
           wishlistSymbols.add(stock.symbol);
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${stock.symbol} added to wishlist!')),
+          SnackBar(
+            content: Text('${stock.symbol} added to wishlist!'),
+            backgroundColor: Colors.teal,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
-    } catch (e) {
+    }
+  } catch (e) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to ${action == 'add' ? 'add to' : 'remove from'} wishlist: $e')),
+        SnackBar(
+          content: Text('Failed to ${action == 'add' ? 'add to' : 'remove from'} wishlist: $e'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {
