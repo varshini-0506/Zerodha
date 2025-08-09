@@ -37,14 +37,14 @@ RUN ln -sf /usr/bin/chromium /usr/bin/google-chrome && \
     chown -h appuser:appuser /usr/bin/google-chrome /usr/local/bin/chromedriver
 
 # Copy only requirements first for layer caching
-COPY Backend/requirements.txt /app/requirements.txt
+COPY requirements.txt /app/requirements.txt
 
 # Install Python deps
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy application code and set ownership
-COPY Backend/ /app/
+COPY . /app/
 RUN chown -R appuser:appuser /app
 
 # Switch to non-root user
