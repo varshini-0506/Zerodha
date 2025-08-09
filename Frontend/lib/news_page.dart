@@ -33,8 +33,98 @@ class _NewsPageState extends State<NewsPage> {
     }
   }
 
+  Future<void> _openUrl(String urlString) async {
+    print('🔗 Attempting to open URL: $urlString');
+    
+    try {
+      if (urlString.isEmpty) {
+        print('❌ Empty URL provided');
+        _showUrlError('Invalid news link');
+        return;
+      }
+
+      String cleanUrl = urlString;
+      if (!urlString.startsWith('http://') && !urlString.startsWith('https://')) {
+        cleanUrl = 'https://$urlString';
+        print('🔧 Added https protocol: $cleanUrl');
+      }
+
+      final uri = Uri.parse(cleanUrl);
+      print('🌐 Parsed URI: $uri');
+
+      bool canLaunch = await canLaunchUrl(uri);
+      print('✅ Can launch URL: $canLaunch');
+
+      if (canLaunch) {
+        bool launched = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+          webViewConfiguration: const WebViewConfiguration(
+            enableJavaScript: true,
+          ),
+        );
+        
+        print('🚀 URL launched successfully: $launched');
+        
+        if (!launched) {
+          print('❌ Launch returned false, trying alternative method');
+          await _tryAlternativeLaunch(uri);
+        }
+      } else {
+        print('❌ Cannot launch URL, trying alternative method');
+        await _tryAlternativeLaunch(uri);
+      }
+    } catch (e) {
+      print('💥 Error launching URL: $e');
+      _showUrlError('Failed to open article: ${e.toString()}');
+    }
+  }
+
+  Future<void> _tryAlternativeLaunch(Uri uri) async {
+    try {
+      bool launched = await launchUrl(
+        uri,
+        mode: LaunchMode.platformDefault,
+      );
+      
+      if (!launched) {
+        await launchUrl(
+          uri,
+          mode: LaunchMode.inAppWebView,
+          webViewConfiguration: const WebViewConfiguration(
+            enableJavaScript: true,
+          ),
+        );
+        print('📱 Opened in in-app web view');
+      } else {
+        print('✅ Alternative launch successful');
+      }
+    } catch (e) {
+      print('❌ Alternative launch failed: $e');
+      _showUrlError('Unable to open article. Please check your internet connection.');
+    }
+  }
+
+  void _showUrlError(String message) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'OK',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
+  }
+
   String _formatDate(String pubDate) {
-    // Example: Mon, 23 Jun 2025 20:49:46 +0530
     try {
       final parts = pubDate.split(' ');
       if (parts.length >= 4) {
@@ -64,7 +154,6 @@ class _NewsPageState extends State<NewsPage> {
         future: fetchNews(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            // Shimmer/skeleton loader
             return ListView.builder(
               itemCount: 6,
               itemBuilder: (context, index) => Padding(
@@ -72,17 +161,32 @@ class _NewsPageState extends State<NewsPage> {
                 child: Container(
                   height: 110,
                   decoration: BoxDecoration(
-                    color: Colors.grey[300],
+                    color: Colors.grey,
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
               ),
             );
           } else if (snapshot.hasError) {
-            return Center(child: Text('Failed to load news', style: TextStyle(color: Colors.red)));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  SizedBox(height: 16),
+                  Text('Failed to load news', style: TextStyle(color: Colors.red)),
+                  SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => setState(() {}),
+                    child: Text('Retry'),
+                  ),
+                ],
+              ),
+            );
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('No news available'));
           }
+          
           final newsList = snapshot.data!;
           return ListView.separated(
             padding: EdgeInsets.symmetric(vertical: 16),
@@ -92,10 +196,7 @@ class _NewsPageState extends State<NewsPage> {
               final news = newsList[index];
               return GestureDetector(
                 onTap: () async {
-                  final url = Uri.parse(news.link);
-                  if (await canLaunchUrl(url)) {
-                    await launchUrl(url, mode: LaunchMode.externalApplication);
-                  }
+                  await _openUrl(news.link);
                 },
                 child: Container(
                   margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -124,7 +225,7 @@ class _NewsPageState extends State<NewsPage> {
                           news.description,
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.grey[800], fontSize: 15, height: 1.4),
+                          style: TextStyle(color: Colors.grey, fontSize: 15, height: 1.4),
                         ),
                         SizedBox(height: 14),
                         Row(
@@ -137,14 +238,17 @@ class _NewsPageState extends State<NewsPage> {
                                   SizedBox(width: 6),
                                   Text(
                                     _formatDate(news.pubDate),
-                                    style: TextStyle(color: Colors.teal[400], fontSize: 13, fontWeight: FontWeight.w500),
+                                    style: TextStyle(color: Colors.teal, fontSize: 13, fontWeight: FontWeight.w500),
                                   ),
                                   SizedBox(width: 16),
-                                  Icon(Icons.source, color: Colors.teal[300], size: 16),
+                                  Icon(Icons.source, color: Colors.teal, size: 16),
                                   SizedBox(width: 6),
-                                  Text(
-                                    news.source,
-                                    style: TextStyle(color: Colors.teal[400], fontSize: 13, fontWeight: FontWeight.w500),
+                                  Flexible(
+                                    child: Text(
+                                      news.source,
+                                      style: TextStyle(color: Colors.teal, fontSize: 13, fontWeight: FontWeight.w500),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -161,7 +265,7 @@ class _NewsPageState extends State<NewsPage> {
           );
         },
       ),
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Colors.grey,
     );
   }
 }
@@ -172,5 +276,12 @@ class NewsItem {
   final String description;
   final String pubDate;
   final String source;
-  NewsItem({required this.title, required this.link, required this.description, required this.pubDate, required this.source});
-} 
+  
+  NewsItem({
+    required this.title,
+    required this.link,
+    required this.description,
+    required this.pubDate,
+    required this.source,
+  });
+}
