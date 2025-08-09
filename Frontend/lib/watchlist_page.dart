@@ -65,16 +65,38 @@ class _WatchlistPageState extends State<WatchlistPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Remove from Wishlist'),
-        content: Text('Are you sure you want to remove ${stock.symbol} from your wishlist?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Remove from Wishlist',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+        ),
+        content: Container(
+          width: double.maxFinite,
+          child: Text(
+            'Are you sure you want to remove ${stock.symbol} from your wishlist?',
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+        contentPadding: EdgeInsets.fromLTRB(24, 20, 24, 0),
+        actionsPadding: EdgeInsets.fromLTRB(16, 8, 16, 16),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey[600],
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: Text('Cancel', style: TextStyle(fontSize: 16)),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Yes'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: Text('Yes', style: TextStyle(fontSize: 16)),
           ),
         ],
       ),

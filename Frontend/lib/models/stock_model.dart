@@ -61,12 +61,12 @@ class Stock {
           : null,
       lastUpdated: json['last_updated'],
       lastPrice: (json['last_price'] ?? json['quote']?['last_price'])?.toDouble(),
-      lastQuantity: json['last_quantity'] ?? json['quote']?['last_quantity'],
+      lastQuantity: (json['last_quantity'] ?? json['quote']?['last_quantity'])?.toInt(),
       lastTradeTime: json['last_trade_time'] ?? json['quote']?['last_trade_time'],
       lowerCircuitLimit: (json['lower_circuit_limit'] ?? json['quote']?['lower_circuit_limit'])?.toDouble(),
       netChange: (json['net_change'] ?? json['quote']?['net_change'])?.toDouble(),
       ohlc: json['ohlc'] ?? json['quote']?['ohlc'],
-      volume: json['volume'] ?? json['quote']?['volume'],
+      volume: (json['volume'] ?? json['quote']?['volume'])?.toInt(),
     );
   }
 

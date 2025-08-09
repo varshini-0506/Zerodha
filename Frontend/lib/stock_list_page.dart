@@ -311,7 +311,7 @@ class _StockListPageState extends State<StockListPage> {
           final stockWithQuote = stock.copyWith(
             quote: quoteData,
             lastPrice: quoteData['last_price']?.toDouble(),
-            volume: quoteData['volume']?.toDouble(),
+            volume: quoteData['volume']?.toInt(),
             netChange: quoteData['change']?.toDouble(),
           );
           stocksWithQuotes.add(stockWithQuote);
@@ -400,16 +400,38 @@ class _StockListPageState extends State<StockListPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('${action == 'add' ? 'Add to' : 'Remove from'} Wishlist'),
-        content: Text('Are you sure you want to ${action == 'add' ? 'add' : 'remove'} ${stock.symbol} ${action == 'add' ? 'to' : 'from'} your wishlist?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          '${action == 'add' ? 'Add to' : 'Remove from'} Wishlist',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+        ),
+        content: Container(
+          width: double.maxFinite,
+          child: Text(
+            'Are you sure you want to ${action == 'add' ? 'add' : 'remove'} ${stock.symbol} ${action == 'add' ? 'to' : 'from'} your wishlist?',
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+        contentPadding: EdgeInsets.fromLTRB(24, 20, 24, 0),
+        actionsPadding: EdgeInsets.fromLTRB(16, 8, 16, 16),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey[600],
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: Text('Cancel', style: TextStyle(fontSize: 16)),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Yes'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: Text('Yes', style: TextStyle(fontSize: 16)),
           ),
         ],
       ),

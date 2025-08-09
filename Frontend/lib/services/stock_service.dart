@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
+import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 
@@ -143,53 +144,76 @@ class StockService {
     }
   }
 
-  // Optimized batch quotes with better error handling
+  // Enhanced batch quotes with APK-specific handling
   static Future<Map<String, dynamic>> getBatchQuotes(List<String> symbols) async {
     return _retryRequest(() async {
       try {
         final uri = Uri.parse('$baseUrl/stocks/batch_quotes');
-        
-        // Log in both debug and release mode for troubleshooting
+      
         print('🔄 Making batch quotes request to: $uri');
+        print('📱 Platform: ${Platform.isAndroid ? 'Android' : 'iOS'}');
         print('📊 Symbols count: ${symbols.length}');
-        print('📋 Symbols: ${symbols.take(5).join(', ')}${symbols.length > 5 ? '...' : ''}');
-        
-        // Add headers for better mobile compatibility
+      
+      // APK-specific headers
         final headers = {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Connection': 'keep-alive',
-          'User-Agent': 'ZerodhaApp/1.0',
+          'User-Agent': 'ZerodhaApp/1.0 (Android)',
+          'Cache-Control': 'no-cache',
+        // Add APK-specific headers
+          if (Platform.isAndroid) ...{
+            'X-Requested-With': 'com.example.frontend',
+            'Origin': 'https://zerodha-ay41.onrender.com',
+          },
         };
-        
+      
+        print('📋 Request headers: $headers');
+      
         final response = await _getClient.post(
           uri,
           headers: headers,
-          body: json.encode({'symbols': symbols}),
+          body: json.encode({
+            'symbols': symbols,
+            'platform': Platform.isAndroid ? 'android_apk' : 'ios_apk',
+          }),
         ).timeout(_timeout);
-        
-        print('📡 Batch quotes response status: ${response.statusCode}');
-        print('📄 Response body length: ${response.body.length}');
-        
+      
+        print('📡 Response status: ${response.statusCode}');
+        print('📄 Response headers: ${response.headers}');
+        print('📦 Response body preview: ${response.body.substring(0, min(200, response.body.length))}...');
+      
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
-          print('✅ Successfully parsed batch quotes response');
-          print('📈 Quotes received: ${(data['quotes'] as Map<String, dynamic>?)?.length ?? 0}');
+          final quotesCount = (data['quotes'] as Map?)?.length ?? 0;
+          print('✅ Successfully parsed $quotesCount quotes');
+        
+        // Log sample quote data for debugging
+          if (quotesCount > 0 && kDebugMode) {
+            final firstQuote = (data['quotes'] as Map).entries.first;
+            print('📈 Sample quote for ${firstQuote.key}: ${firstQuote.value}');
+          }
+        
           return data;
         } else {
-          print('❌ Batch quotes failed with status: ${response.statusCode}');
-          print('📄 Error response: ${response.body}');
-          throw Exception('Failed to load batch quotes: ${response.statusCode} - ${response.body}');
+          print('❌ HTTP ${response.statusCode}: ${response.body}');
+          throw Exception('Server returned ${response.statusCode}: ${response.body}');
         }
       } on SocketException catch (e) {
-        print('🌐 Network error in getBatchQuotes: $e');
-        throw Exception('Network error: Please check your internet connection');
+        print('🌐 Socket error: $e');
+        throw Exception('Network connection failed. Please check your internet connection and try again.');
+      } on TlsException catch (e) {
+        print('🔒 TLS/SSL error: $e');
+        throw Exception('SSL connection failed. Please check your network security settings.');
       } on TimeoutException catch (e) {
-        print('⏰ Timeout error in getBatchQuotes: $e');
-        throw Exception('Request timeout: Please try again');
+        print('⏰ Timeout error: $e');
+        throw Exception('Request timed out. Please try again.');
+      } on FormatException catch (e) {
+        print('📄 JSON parsing error: $e');
+        throw Exception('Invalid response format from server.');
       } catch (e) {
-        print('💥 Error in getBatchQuotes: $e');
-        throw Exception('Error fetching batch quotes: $e');
+        print('💥 Unexpected error: $e');
+        throw Exception('Unexpected error: ${e.toString()}');
       }
     });
   }
