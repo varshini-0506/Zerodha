@@ -4,7 +4,7 @@ monkey.patch_all()
 # Standard library imports
 import asyncio
 import json
-import threading
+# import threading  # REMOVED - no longer needed
 import os
 import socket
 from typing import Dict, List, Optional
@@ -706,8 +706,8 @@ from kiteconnect import KiteConnect
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 from supabase import create_client
-import threading
-import uuid
+# import threading  # REMOVED - no longer needed
+# import uuid  # REMOVED - no longer needed
 import logging
 from webdriver_manager.chrome import ChromeDriverManager
 
@@ -715,17 +715,17 @@ from webdriver_manager.chrome import ChromeDriverManager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global job storage (in production, use Redis or database)
-_JOB_RESULTS = {}
-_JOB_LOCK = threading.Lock()
+# # Global job storage - REMOVED (no longer needed)
+# _JOB_RESULTS = {}
+# _JOB_LOCK = threading.Lock()
 
-def _store_job_result(job_id, payload):
-    with _JOB_LOCK:
-        _JOB_RESULTS[job_id] = payload
+# def _store_job_result(job_id, payload):
+#     with _JOB_LOCK:
+#         _JOB_RESULTS[job_id] = payload
 
-def _get_job_result(job_id):
-    with _JOB_LOCK:
-        return _JOB_RESULTS.get(job_id)
+# def _get_job_result(job_id):
+#     with _JOB_LOCK:
+#         return _JOB_RESULTS.get(job_id)
 
 def _create_driver():
     chrome_bin = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
@@ -777,7 +777,7 @@ def _create_driver():
         logger.exception("All ChromeDriver attempts failed")
         raise WebDriverException("Could not create ChromeDriver - all methods failed")
 
-def _perform_refresh_flow(job_id):
+def perform_refresh():
     # Add debugging for environment
     logger.info("=== Environment Debug ===")
     logger.info(f"CHROME_BIN: {os.environ.get('CHROME_BIN', 'NOT SET')}")
@@ -805,7 +805,6 @@ def _perform_refresh_flow(job_id):
         "started_at": datetime.utcnow().isoformat(),
         "finished_at": None
     }
-    _store_job_result(job_id, result)
 
     driver = None
     try:
@@ -825,16 +824,14 @@ def _perform_refresh_flow(job_id):
             (SUPABASE_KEY, "SUPABASE_KEY")] if not v]
         if missing:
             result["error"] = f"Missing required envs: {', '.join([n for _, n in missing])}"
-            _store_job_result(job_id, result)
-            return
+            return result
 
         # quick TOTP check
         try:
             _ = pyotp.TOTP(TOTP_SECRET).now()
         except Exception as e:
             result["error"] = f"Invalid TOTP secret: {e}"
-            _store_job_result(job_id, result)
-            return
+            return result
 
         # network checks
         nc = []
@@ -903,8 +900,7 @@ def _perform_refresh_flow(job_id):
             except Exception:
                 pass
             result["error"] = f"TOTP step failed: {te}"
-            _store_job_result(job_id, result)
-            return
+            return result
 
         # wait for redirect containing request_token
         wait.until(lambda d: "request_token" in d.current_url)
@@ -913,8 +909,7 @@ def _perform_refresh_flow(job_id):
         request_token = parse_qs(parsed.query).get("request_token", [None])[0]
         if not request_token:
             result["error"] = f"Request token missing in URL: {redirected_url}"
-            _store_job_result(job_id, result)
-            return
+            return result
         result["request_token"] = request_token
 
         # get access token
@@ -933,7 +928,7 @@ def _perform_refresh_flow(job_id):
 
         result["success"] = True
         result["finished_at"] = datetime.utcnow().isoformat()
-        _store_job_result(job_id, result)
+        return result
     except Exception as e:
         logger.exception("Refresh job failed")
         result["error"] = str(e)
@@ -944,7 +939,7 @@ def _perform_refresh_flow(job_id):
         except Exception:
             pass
         result["finished_at"] = datetime.utcnow().isoformat()
-        _store_job_result(job_id, result)
+        return result
     finally:
         if driver:
             try:
@@ -952,22 +947,25 @@ def _perform_refresh_flow(job_id):
             except Exception:
                 pass
 
-# Endpoint that starts background job and immediately returns job_id
 @app.route("/api/refresh_zerodha_token", methods=["POST"])
 def refresh_zerodha_token():
-    job_id = str(uuid.uuid4())
-    # start background thread
-    t = threading.Thread(target=_perform_refresh_flow, args=(job_id,), daemon=True)
-    t.start()
-    return jsonify({"status": "started", "job_id": job_id}), 202
+    """Refresh Zerodha access token"""
+    try:
+        result = perform_refresh()
+        if result["success"]:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+    except Exception as e:
+        return jsonify({"error": str(e), "success": False}), 500
 
-# Endpoint to fetch job result
-@app.route("/api/refresh_result/<job_id>", methods=["GET"])
-def refresh_result(job_id):
-    res = _get_job_result(job_id)
-    if res is None:
-        return jsonify({"error": "job_id not found"}), 404
-    return jsonify(res), 200
+# # Endpoint to fetch job result - REMOVED (no longer needed)
+# @app.route("/api/refresh_result/<job_id>", methods=["GET"])
+# def refresh_result(job_id):
+#     res = _get_job_result(job_id)
+#     if res is None:
+#         return jsonify({"error": "job_id not found"}), 404
+#     return jsonify(res), 200
 
 @app.route('/api/stock_events/<symbol>', methods=['GET'])
 def get_combined_stock_events(symbol):
