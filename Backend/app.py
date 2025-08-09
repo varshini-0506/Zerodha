@@ -728,58 +728,71 @@ def _get_job_result(job_id):
         return _JOB_RESULTS.get(job_id)
 
 def _create_driver():
-    # Chrome binary from env
     chrome_bin = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
     options = Options()
     options.binary_location = chrome_bin
-    # Prefer modern headless mode if supported
-    try:
-        options.add_argument("--headless=new")
-    except Exception:
-        options.add_argument("--headless")
+    
+    # Enhanced headless options for Docker
+    options.add_argument("--headless=new")  # Use newer headless mode
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-background-timer-throttling")
+    options.add_argument("--disable-backgrounding-occluded-windows")
+    options.add_argument("--disable-renderer-backgrounding")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-extensions")
     options.add_argument("--disable-setuid-sandbox")
+    options.add_argument("--disable-features=TranslateUI")
+    options.add_argument("--disable-ipc-flooding-protection")
+    options.add_argument("--remote-debugging-port=9222")
 
-    # 1) Try Selenium default
-    try:
-        logger.info("Attempt Selenium default Chrome driver")
-        drv = webdriver.Chrome(options=options)
-        return drv
-    except Exception as e:
-        logger.info(f"Selenium default failed: {e}")
-
-    # 2) Try common paths
-    possible = [
+    # Explicit ChromeDriver paths to try
+    driver_paths = [
         "/usr/lib/chromium/chromedriver",
-        "/usr/bin/chromedriver",
-        "/usr/local/bin/chromedriver",
-        os.environ.get("CHROMEDRIVER_PATH"),
-        os.environ.get("SELENIUM_DRIVER_PATH"),
+        "/usr/local/bin/chromedriver", 
+        "/usr/bin/chromedriver"
     ]
-    for p in possible:
-        if p and os.path.exists(p):
+    
+    # Try each path
+    for path in driver_paths:
+        if os.path.exists(path) and os.access(path, os.X_OK):
             try:
-                svc = Service(executable_path=p)
-                drv = webdriver.Chrome(service=svc, options=options)
-                return drv
+                logger.info(f"Attempting ChromeDriver at: {path}")
+                service = Service(executable_path=path)
+                driver = webdriver.Chrome(service=service, options=options)
+                return driver
             except Exception as e:
-                logger.info(f"Driver at {p} failed: {e}")
-
-    # 3) Fallback to webdriver-manager (downloads matching chromedriver)
+                logger.info(f"ChromeDriver at {path} failed: {e}")
+                continue
+    
+    # Fallback to webdriver-manager if paths fail
     try:
-        path = ChromeDriverManager().install()
-        svc = Service(executable_path=path)
-        drv = webdriver.Chrome(service=svc, options=options)
-        return drv
+        logger.info("Fallback to webdriver-manager")
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+        return driver
     except Exception as e:
-        logger.exception("webdriver-manager fallback failed")
-        raise WebDriverException("Could not create ChromeDriver")
+        logger.exception("All ChromeDriver attempts failed")
+        raise WebDriverException("Could not create ChromeDriver - all methods failed")
 
 def _perform_refresh_flow(job_id):
+    # Add debugging for environment
+    logger.info("=== Environment Debug ===")
+    logger.info(f"CHROME_BIN: {os.environ.get('CHROME_BIN', 'NOT SET')}")
+    logger.info(f"CHROMEDRIVER_PATH: {os.environ.get('CHROMEDRIVER_PATH', 'NOT SET')}")
+    logger.info(f"PATH: {os.environ.get('PATH', 'NOT SET')}")
+    
+    # Check if files exist and are executable
+    chrome_bin = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
+    chromedriver_path = os.environ.get("CHROMEDRIVER_PATH", "/usr/lib/chromium/chromedriver")
+    
+    logger.info(f"Chrome binary exists: {os.path.exists(chrome_bin)}")
+    logger.info(f"Chrome binary executable: {os.access(chrome_bin, os.X_OK)}")
+    logger.info(f"ChromeDriver exists: {os.path.exists(chromedriver_path)}")
+    logger.info(f"ChromeDriver executable: {os.access(chromedriver_path, os.X_OK)}")
+    
     result = {
         "success": False,
         "access_token": "",
