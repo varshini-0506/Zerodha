@@ -1,7 +1,7 @@
 # Combined Dockerfile - Chromium + chromedriver verification + production gunicorn
 FROM python:3.11-slim
 
-# Basic env
+# Basic env vars
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV CHROME_BIN=/usr/bin/chromium
