@@ -24,7 +24,8 @@ from supabase import create_client, Client
 from flask_socketio import SocketIO, emit
 import pyotp
 import base64
-
+from agent import answer
+import tempfile
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -1200,6 +1201,73 @@ def get_stock_historical_data(symbol):
 
     return jsonify(resp)
 
+def _is_audio(filename: str, content_type: str) -> bool:
+    """Check if the uploaded file is a valid audio file based on filename and content type."""
+    if not filename:
+        return False
+    
+    # Check file extension
+    audio_extensions = {'.wav', '.mp3', '.m4a', '.flac', '.aac', '.ogg', '.wma', '.opus', '.webm'}
+    file_ext = os.path.splitext(filename.lower())[1]
+    
+    # Check content type
+    audio_content_types = {
+        'audio/wav', 'audio/wave', 'audio/x-wav',
+        'audio/mpeg', 'audio/mp3',
+        'audio/mp4', 'audio/x-m4a',
+        'audio/flac',
+        'audio/aac', 'audio/x-aac',
+        'audio/ogg', 'audio/x-ogg-audio',
+        'audio/x-ms-wma',
+        'audio/opus',
+        'audio/webm'
+    }
+    
+    return file_ext in audio_extensions or (content_type and content_type.lower() in audio_content_types)
+
+@app.post("/answer")
+def answer_audio():
+    if "audio" not in request.files:
+        return jsonify({"error": "Missing form field 'audio'"}), 400
+
+    file = request.files["audio"]
+    prompt = request.form.get(
+        "prompt", "user have asked a question respond them, the user might ask very vague question , so respond them with the data you have access to"
+    )
+
+    if not file or file.filename == "":
+        return jsonify({"error": "Empty filename"}), 400
+
+    if not _is_audio(file.filename, file.content_type):
+        return jsonify({"error": "Invalid file type. Please upload an audio file."}), 400
+
+    tmp_path = None
+    suffix = os.path.splitext(file.filename or "upload")[1] or ".wav"
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp_path = tmp.name
+        # Save uploaded file reliably
+        file.save(tmp_path)
+
+        # Validate file exists and has size
+        try:
+            stat = os.stat(tmp_path)
+            if stat.st_size == 0:
+                raise ValueError("Uploaded file saved with 0 bytes.")
+        except Exception as stat_exc:
+            return jsonify({"error": f"Failed to persist upload: {stat_exc}"}), 500
+
+        text = answer(tmp_path, prompt=prompt or "")
+        return jsonify({"text": text})
+    except Exception as exc:
+        return jsonify({"error": f"Model error: {exc}"}), 500
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+            
 def on_ticks(ws, ticks):
     """Callback when ticks are received"""
     for tick in ticks:
