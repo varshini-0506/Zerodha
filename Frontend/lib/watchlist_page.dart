@@ -3,6 +3,10 @@ import 'models/stock_model.dart';
 import 'services/stock_service.dart';
 import 'auth_service.dart';
 import 'stock_detail_page.dart';
+import 'news_page.dart';
+import 'events_page.dart';
+import 'stock_list_page.dart';
+import 'main.dart';
 
 class WatchlistPage extends StatefulWidget {
   const WatchlistPage({super.key});
@@ -154,7 +158,121 @@ class _WatchlistPageState extends State<WatchlistPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Wishlist')),
+      appBar: AppBar(
+        title: Text('Wishlist'),
+        automaticallyImplyLeading: false,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+      ),
+      drawer: Drawer(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(32),
+            bottomRight: Radius.circular(32),
+          ),
+        ),
+        backgroundColor: Colors.grey[50],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.teal[700]!, Colors.teal[500]!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: 20),
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    child: Icon(Icons.person, size: 35, color: Colors.white),
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    AuthService().getCurrentUser()?.email ?? 'user@example.com',
+                    style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14),
+                  ),
+                  SizedBox(height: 20),
+                ],
+              ),
+            ),
+            SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8),
+              child: Text('MENU', style: TextStyle(color: Colors.teal[700], fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)),
+            ),
+            Divider(),
+            ListTile(
+              leading: Icon(Icons.home, color: Colors.teal),
+              title: Text('Home', style: TextStyle(fontWeight: FontWeight.w500)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => StockListPage(), settings: RouteSettings(name: '/home')),
+                  (route) => false,
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.star, color: Colors.amber),
+              title: Text('Wishlist', style: TextStyle(fontWeight: FontWeight.w500)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onTap: () {
+                Navigator.pop(context);
+                // Already on Wishlist; keep consistent UX
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.article, color: Colors.teal),
+              title: Text('News', style: TextStyle(fontWeight: FontWeight.w500)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => NewsPage(), settings: RouteSettings(name: '/news')));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.event, color: Colors.deepPurple),
+              title: Text('Events', style: TextStyle(fontWeight: FontWeight.w500)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => EventsPage(), settings: RouteSettings(name: '/events')));
+              },
+            ),
+            Spacer(),
+            Divider(),
+            ListTile(
+              leading: Icon(Icons.logout, color: Colors.red),
+              title: Text('Logout', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.red)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onTap: () async {
+                Navigator.pop(context);
+                await AuthService().signOut();
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => AuthWrapper()),
+                  (route) => false,
+                );
+              },
+            ),
+            SizedBox(height: 16),
+          ],
+        ),
+      ),
       body: isLoading
           ? Center(child: CircularProgressIndicator())
           : errorMessage != null

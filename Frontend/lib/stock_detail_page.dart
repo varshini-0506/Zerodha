@@ -5,6 +5,11 @@ import 'widgets/live_price_chart.dart';
 import 'dart:ui';
 import 'dart:async'; // Added for StreamSubscription and Timer
 import 'services/websocket_service.dart';
+import 'watchlist_page.dart';
+import 'events_page.dart';
+import 'news_page.dart';
+import 'stock_list_page.dart';
+import 'main.dart';
 
 class StockDetailPage extends StatefulWidget {
   final Stock stock;
@@ -102,6 +107,13 @@ class _StockDetailPageState extends State<StockDetailPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         title: Text(_stock.name),
         backgroundColor: Colors.teal[600],
         foregroundColor: Colors.white,
@@ -115,6 +127,100 @@ class _StockDetailPageState extends State<StockDetailPage> {
             },
           ),
         ],
+      ),
+      drawer: Drawer(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(32),
+            bottomRight: Radius.circular(32),
+          ),
+        ),
+        backgroundColor: Colors.grey[50],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.teal[700]!, Colors.teal[500]!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  SizedBox(height: 20),
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.white24,
+                    child: Icon(Icons.person, size: 35, color: Colors.white),
+                  ),
+                  SizedBox(height: 20),
+                ],
+              ),
+            ),
+            SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8),
+              child: Text('MENU', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)),
+            ),
+            Divider(),
+            ListTile(
+              leading: Icon(Icons.home, color: Colors.teal),
+              title: Text('Home', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => StockListPage(), settings: RouteSettings(name: '/home')),
+                  (route) => false,
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.star, color: Colors.amber),
+              title: Text('Wishlist', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => WatchlistPage(), settings: RouteSettings(name: '/wishlist')));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.article, color: Colors.teal),
+              title: Text('News', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => NewsPage(), settings: RouteSettings(name: '/news')));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.event, color: Colors.deepPurple),
+              title: Text('Events', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => EventsPage(), settings: RouteSettings(name: '/events')));
+              },
+            ),
+            Spacer(),
+            Divider(),
+            ListTile(
+              leading: Icon(Icons.logout, color: Colors.red),
+              title: Text('Logout', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.red)),
+              onTap: () async {
+                Navigator.pop(context);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => AuthWrapper()),
+                  (route) => false,
+                );
+              },
+            ),
+            SizedBox(height: 16),
+          ],
+        ),
       ),
       body: Container(
         decoration: BoxDecoration(

@@ -9,8 +9,8 @@
     
     <!-- Production domain configuration -->
     <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="true">zerodha-ay41.onrender.com</domain>
-        <domain includeSubdomains="true">onrender.com</domain>
+        <domain includeSubdomains="true">zerodha-production-04a6.up.railway.app</domain>
+        <domain includeSubdomains="true">railway.app</domain>
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

@@ -9,8 +9,8 @@
     </base-config>
     
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">zerodha-ay41.onrender.com</domain>
-        <domain includeSubdomains="true">onrender.com</domain>
+        <domain includeSubdomains="true">zerodha-production-04a6.up.railway.app</domain>
+        <domain includeSubdomains="true">railway.app</domain>
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>

@@ -572,6 +572,16 @@ class _StockListPageState extends State<StockListPage> {
             ),
             Divider(),
             ListTile(
+              leading: Icon(Icons.home, color: Colors.teal),
+              title: Text('Home', style: TextStyle(fontWeight: FontWeight.w500)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              tileColor: Colors.teal[50],
+              onTap: () {
+                Navigator.pop(context);
+                // Already on Home page
+              },
+            ),
+            ListTile(
               leading: Icon(Icons.star, color: Colors.amber),
               title: Text('Wishlist', style: TextStyle(fontWeight: FontWeight.w500)),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -643,10 +653,7 @@ class _StockListPageState extends State<StockListPage> {
                },
              ),
              SizedBox(height: 16),
-             Padding(
-               padding: const EdgeInsets.only(bottom: 16.0, left: 20),
-               child: Text('Zerodha Demo App', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-             ),
+              // Footer label removed
           ],
         ),
       ),

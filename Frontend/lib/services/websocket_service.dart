@@ -29,7 +29,7 @@ class WebSocketService {
 
     try {
       _socket = IO.io(
-        'https://zerodha-ay41.onrender.com',
+        'https://zerodha-production-04a6.up.railway.app',
         <String, dynamic>{
           'transports': ['websocket'],
           'autoConnect': true,

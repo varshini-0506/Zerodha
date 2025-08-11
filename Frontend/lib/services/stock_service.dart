@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 
 class StockService {
   // Deployed backend URL
-  static const String baseUrl = 'https://zerodha-ay41.onrender.com/api';
+  static const String baseUrl = 'https://zerodha-production-04a6.up.railway.app/api';
   
   // HTTP client with optimized configuration for mobile networks
   static http.Client? _client;
@@ -164,7 +164,7 @@ class StockService {
         // Add APK-specific headers
           if (Platform.isAndroid) ...{
             'X-Requested-With': 'com.example.frontend',
-            'Origin': 'https://zerodha-ay41.onrender.com',
+            'Origin': 'https://zerodha-production-04a6.up.railway.app',
           },
         };
       

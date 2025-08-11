@@ -32,7 +32,7 @@ class NetworkDebugHelper {
   
   static Future<void> _testDnsResolution() async {
     try {
-      final result = await InternetAddress.lookup('zerodha-ay41.onrender.com');
+      final result = await InternetAddress.lookup('zerodha-production-04a6.up.railway.app');
       print('✅ DNS resolution: ${result.isNotEmpty ? 'OK' : 'FAILED'}');
       if (result.isNotEmpty) {
         print('📍 Resolved to: ${result.first.address}');
@@ -45,7 +45,7 @@ class NetworkDebugHelper {
   static Future<void> _testApiConnectivity() async {
     try {
       final response = await http.get(
-        Uri.parse('https://zerodha-ay41.onrender.com/api/market_status'),
+        Uri.parse('https://zerodha-production-04a6.up.railway.app/api/market_status'),
       ).timeout(Duration(seconds: 15));
       print('✅ API connectivity: ${response.statusCode == 200 ? 'OK' : 'FAILED (${response.statusCode})'}');
     } catch (e) {
@@ -61,7 +61,7 @@ class NetworkDebugHelper {
         return false; // Reject bad certificates
       };
       
-      final request = await client.getUrl(Uri.parse('https://zerodha-ay41.onrender.com/api/market_status'));
+      final request = await client.getUrl(Uri.parse('https://zerodha-production-04a6.up.railway.app/api/market_status'));
       final response = await request.close();
       print('✅ Certificate validation: ${response.statusCode == 200 ? 'OK' : 'FAILED'}');
       

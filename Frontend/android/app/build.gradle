@@ -66,13 +66,13 @@ android {
             debuggable false
             
             // Network optimizations
-            buildConfigField "String", "API_BASE_URL", "\"https://zerodha-ay41.onrender.com/api\""
+            buildConfigField "String", "API_BASE_URL", "\"https://zerodha-production-04a6.up.railway.app/api\""
         }
         
         debug {
             debuggable true
             minifyEnabled false
-            buildConfigField "String", "API_BASE_URL", "\"https://zerodha-ay41.onrender.com/api\""
+            buildConfigField "String", "API_BASE_URL", "\"https://zerodha-production-04a6.up.railway.app/api\""
         }
     }
 }

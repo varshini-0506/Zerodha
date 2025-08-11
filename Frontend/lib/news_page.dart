@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
+import 'watchlist_page.dart';
+import 'events_page.dart';
+import 'stock_list_page.dart';
+import 'main.dart';
 
 class NewsPage extends StatefulWidget {
   @override
@@ -11,7 +15,7 @@ class NewsPage extends StatefulWidget {
 class _NewsPageState extends State<NewsPage> {
   Future<List<NewsItem>> fetchNews() async {
     try {
-      final response = await http.get(Uri.parse('https://zerodha-ay41.onrender.com/api/news'));
+      final response = await http.get(Uri.parse('https://zerodha-production-04a6.up.railway.app/api/news'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final newsList = data['news'] as List;
@@ -140,6 +144,13 @@ class _NewsPageState extends State<NewsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         title: Row(
           children: [
             Icon(Icons.article, color: Colors.white),
@@ -149,6 +160,101 @@ class _NewsPageState extends State<NewsPage> {
         ),
         backgroundColor: Colors.teal[700],
         elevation: 3,
+      ),
+      drawer: Drawer(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(32),
+            bottomRight: Radius.circular(32),
+          ),
+        ),
+        backgroundColor: Colors.grey[50],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.teal[700]!, Colors.teal[500]!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  SizedBox(height: 20),
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.white24,
+                    child: Icon(Icons.person, size: 35, color: Colors.white),
+                  ),
+                  SizedBox(height: 20),
+                ],
+              ),
+            ),
+            SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8),
+              child: Text('MENU', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)),
+            ),
+            Divider(),
+            ListTile(
+              leading: Icon(Icons.home, color: Colors.teal),
+              title: Text('Home', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => StockListPage(), settings: RouteSettings(name: '/home')),
+                  (route) => false,
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.star, color: Colors.amber),
+              title: Text('Wishlist', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => WatchlistPage(), settings: RouteSettings(name: '/wishlist')));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.article, color: Colors.teal),
+              title: Text('News', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                // Already on News page; optionally refresh or do nothing. We'll keep navigation consistent.
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.event, color: Colors.deepPurple),
+              title: Text('Events', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => EventsPage(), settings: RouteSettings(name: '/events')));
+              },
+            ),
+            Spacer(),
+            Divider(),
+            ListTile(
+              leading: Icon(Icons.logout, color: Colors.red),
+              title: Text('Logout', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.red)),
+              onTap: () async {
+                Navigator.pop(context);
+                // No direct AuthService import here; handled from main wrapper generally
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => AuthWrapper()),
+                  (route) => false,
+                );
+              },
+            ),
+            SizedBox(height: 16),
+          ],
+        ),
       ),
       body: FutureBuilder<List<NewsItem>>(
         future: fetchNews(),
