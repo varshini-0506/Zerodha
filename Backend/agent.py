@@ -9,7 +9,7 @@ from google.genai import types
 def get_current_price(symbol: str) -> dict:
     """Get the latest trade/quote fields for a symbol from the Zerodha-like API.
 
-    This function is expected to call `https://zerodha-ay41.onrender.com/api/stocks/{symbol}`
+    This function is expected to call `https://zerodha-production-04a6.up.railway.app/api/stocks/{symbol}`
     and normalize the `quote` and related top-level fields into a compact shape.
 
     Args:
@@ -25,7 +25,7 @@ def get_current_price(symbol: str) -> dict:
         - source_url: str  # the URL used for the request
         - raw_quote: Dict[str, Any]  # full provider `quote` object for debugging
     """
-    base_url = "https://zerodha-ay41.onrender.com/api/stocks/"
+    base_url = "https://zerodha-production-04a6.up.railway.app/api/stocks/"
     url = f"{base_url}{symbol}"
     try:
         response = requests.get(url, timeout=15)
@@ -59,7 +59,7 @@ def get_current_price(symbol: str) -> dict:
 def get_historical_data(symbol: str, limit: int = 200) -> dict:
     """Get historical checkpoints (daily OHLCV) for a symbol from the Zerodha-like API.
 
-    This function is expected to call `https://zerodha-ay41.onrender.com/api/stocks/{symbol}`
+    This function is expected to call `https://zerodha-production-04a6.up.railway.app/api/stocks/{symbol}`
     and map the `historical_data` array into a normalized OHLCV list.
 
     Args:
@@ -88,7 +88,7 @@ def get_historical_data(symbol: str, limit: int = 200) -> dict:
           - c: float # close
           - v: float # volume
     """
-    base_url = "https://zerodha-ay41.onrender.com/api/stocks/"
+    base_url = "https://zerodha-production-04a6.up.railway.app/api/stocks/"
     url = f"{base_url}{symbol}"
     try:
         response = requests.get(url, timeout=20)
@@ -276,7 +276,7 @@ def get_order_book(symbol: str, depth: int = 5) -> dict:
         - asks: List[Dict[str, float]]  # [{price, quantity, orders}, ...]
         - as_of: str  # timestamp if available in provider payload
     """
-    base_url = "https://zerodha-ay41.onrender.com/api/stocks/"
+    base_url = "https://zerodha-production-04a6.up.railway.app/api/stocks/"
     url = f"{base_url}{symbol}"
     try:
         response = requests.get(url, timeout=15)
@@ -337,7 +337,7 @@ def get_news(symbol: str | None = None, limit: int = 25) -> dict:
             - source: str
             - published_at: str
     """
-    url = "https://zerodha-ay41.onrender.com/api/news"
+    url = "https://zerodha-production-04a6.up.railway.app/api/news"
     try:
         resp = requests.get(url, timeout=20)
         resp.raise_for_status()
